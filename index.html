@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Warhammer 40k 10th Entscheidungsrechner</title>
   <style>
     :root {
@@ -29,47 +29,98 @@
       --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
     }
 
-    * {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
     }
 
-    html, body {
+    html,
+    body {
       margin: 0;
       min-height: 100%;
+      width: 100%;
+      max-width: 100%;
       background:
         radial-gradient(circle at top right, rgba(127, 227, 197, 0.08), transparent 32%),
         radial-gradient(circle at bottom left, rgba(111, 164, 255, 0.08), transparent 28%),
         var(--bg);
       color: var(--text);
       font-family: var(--font-ui);
+      overflow-x: hidden;
     }
 
     body {
-      padding: 18px 14px 40px;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
 
     button,
     input,
     select {
       font: inherit;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
-    .app-shell {
-      width: min(1240px, 100%);
+    h1,
+    h2,
+    h3,
+    p,
+    span,
+    small,
+    label,
+    div {
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
       margin: 0 auto;
+      padding: 16px;
     }
 
     .layout {
       display: grid;
       gap: 18px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .stack {
       display: grid;
       gap: 16px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    .layout > *,
+    .stack > *,
+    .grid > *,
+    .subgrid > *,
+    .button-row > *,
+    .stats-grid > *,
+    .distribution-grid > *,
+    .card-title > *,
+    .toggle-head > *,
+    .list-row > *,
+    .dist-row > *,
+    .hero-meta > *,
+    .distribution-meta > *,
+    .badge-row > * {
+      min-width: 0;
+      max-width: 100%;
     }
 
     .card {
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)), var(--bg-card);
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -83,7 +134,7 @@
 
     .hero h1 {
       margin: 0 0 10px;
-      font-size: clamp(1.55rem, 4vw, 2.35rem);
+      font-size: clamp(1.55rem, 6vw, 2.35rem);
       line-height: 1.08;
       letter-spacing: -0.03em;
     }
@@ -92,7 +143,7 @@
       margin: 0;
       color: var(--text-soft);
       line-height: 1.5;
-      max-width: 70ch;
+      max-width: 100%;
     }
 
     .hero-meta {
@@ -100,6 +151,8 @@
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 14px;
+      width: 100%;
+      max-width: 100%;
     }
 
     .pill {
@@ -112,6 +165,7 @@
       border: 1px solid var(--line);
       color: var(--text-soft);
       font-size: 0.92rem;
+      max-width: 100%;
     }
 
     .panel {
@@ -120,10 +174,13 @@
 
     .card-title {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
       align-items: baseline;
-      gap: 12px;
+      gap: 10px 12px;
       margin-bottom: 14px;
+      width: 100%;
+      max-width: 100%;
     }
 
     .card-title h2,
@@ -137,20 +194,27 @@
       color: var(--text-soft);
       font-size: 0.93rem;
       line-height: 1.45;
+      max-width: 100%;
     }
 
     .grid {
       display: grid;
       gap: 14px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .grid.two {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .field {
       display: grid;
       gap: 7px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .field label {
@@ -160,7 +224,6 @@
 
     .field input,
     .field select {
-      width: 100%;
       min-height: 52px;
       border-radius: 16px;
       border: 1px solid var(--line);
@@ -180,6 +243,9 @@
     .inline-toggle {
       display: grid;
       gap: 10px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding: 14px;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.02);
@@ -188,39 +254,56 @@
 
     .toggle-head {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px 12px;
+      width: 100%;
+      max-width: 100%;
     }
 
     .toggle-label {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 10px;
       font-weight: 600;
+      max-width: 100%;
     }
 
     .toggle-label input {
       inline-size: 22px;
       block-size: 22px;
+      width: 22px;
+      min-width: 22px;
+      max-width: 22px;
       accent-color: var(--accent-strong);
+      flex: 0 0 auto;
     }
 
     .subgrid {
       display: grid;
       gap: 12px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .actions {
       display: grid;
       gap: 10px;
       margin-top: 6px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .button-row {
       display: grid;
       gap: 10px;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     button {
@@ -246,6 +329,8 @@
 
     .error-box,
     .note-box {
+      width: 100%;
+      max-width: 100%;
       padding: 14px 16px;
       border-radius: 16px;
       line-height: 1.45;
@@ -266,10 +351,16 @@
     .stats-grid {
       display: grid;
       gap: 12px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr);
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .stat {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding: 14px;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.02);
@@ -284,7 +375,7 @@
 
     .stat strong {
       display: block;
-      font-size: clamp(1.18rem, 4vw, 1.5rem);
+      font-size: clamp(1.18rem, 5vw, 1.5rem);
       letter-spacing: -0.03em;
     }
 
@@ -293,12 +384,18 @@
     .summary-list {
       display: grid;
       gap: 10px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .list-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding: 12px 14px;
       border-radius: 16px;
       background: rgba(255, 255, 255, 0.02);
@@ -307,20 +404,32 @@
 
     .list-row span:last-child {
       color: var(--text-soft);
-      text-align: right;
-      white-space: nowrap;
+      text-align: left;
+      white-space: normal;
     }
 
     .distribution-grid {
       display: grid;
       gap: 16px;
+      grid-template-columns: minmax(0, 1fr);
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .distribution-card {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding: 16px;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .distribution-card h3 {
+      margin: 0;
     }
 
     .distribution-meta {
@@ -330,21 +439,30 @@
       margin: 10px 0 12px;
       color: var(--text-soft);
       font-size: 0.91rem;
+      width: 100%;
+      max-width: 100%;
     }
 
     .distribution-scroll {
       display: grid;
       gap: 8px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       max-height: 320px;
-      overflow: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding-right: 2px;
     }
 
     .dist-row {
       display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) 76px;
+      grid-template-columns: minmax(2.25rem, auto) minmax(0, 1fr) minmax(4.5rem, auto);
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       font-size: 0.92rem;
     }
 
@@ -368,6 +486,8 @@
     .dist-bar {
       position: relative;
       min-height: 16px;
+      width: 100%;
+      max-width: 100%;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.06);
       overflow: hidden;
@@ -384,12 +504,16 @@
       text-align: right;
       color: var(--text-soft);
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
 
     .badge-row {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
       margin-top: 4px;
+      width: 100%;
+      max-width: 100%;
     }
 
     .badge {
@@ -400,6 +524,7 @@
       color: var(--text-soft);
       border: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.04);
+      max-width: 100%;
     }
 
     .badge.threshold {
@@ -417,16 +542,13 @@
       color: var(--text-dim);
       font-size: 0.84rem;
       line-height: 1.5;
+      max-width: 100%;
     }
 
     @media (min-width: 760px) {
-      body {
-        padding: 28px 22px 48px;
-      }
-
-      .layout {
-        grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
-        align-items: start;
+      .container {
+        max-width: 860px;
+        padding: 20px;
       }
 
       .grid.two {
@@ -437,8 +559,34 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
+      .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .distribution-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .list-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+      }
+
+      .list-row span:last-child {
+        text-align: right;
+        white-space: nowrap;
+      }
+    }
+
+    @media (min-width: 980px) {
+      .container {
+        max-width: 1280px;
+        padding: 24px;
+      }
+
+      .layout {
+        grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+        align-items: start;
       }
 
       .stats-grid {
@@ -448,7 +596,7 @@
   </style>
 </head>
 <body>
-  <div class="app-shell">
+  <div class="container">
     <header class="hero card">
       <h1>Warhammer 40.000 10th Edition Entscheidungsrechner</h1>
       <p>
@@ -803,18 +951,6 @@
         resetBtn.addEventListener("click", () => {
           applyBaseProfile();
         });
-
-        form.addEventListener("reset", () => {
-          window.setTimeout(() => {
-            renderModeFields("attack");
-            renderModeFields("damage");
-            document.getElementById("fnpFields").classList.toggle("hidden", !fieldRefs.fnpEnabled.checked);
-            document.getElementById("sustainedFields").classList.toggle("hidden", !fieldRefs.sustainedEnabled.checked);
-            document.getElementById("lethalFields").classList.toggle("hidden", !fieldRefs.lethalEnabled.checked);
-            document.getElementById("devFields").classList.toggle("hidden", !fieldRefs.devEnabled.checked);
-            safeRecalculate();
-          }, 0);
-        });
       }
 
       function renderModeFields(kind) {
@@ -1067,13 +1203,11 @@
       }
 
       function calculateAll(data) {
-        // Stufe 1: Diskrete Basismodelle für Attackenzahl und Schaden aufbauen.
         const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
         const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
         const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
         const bestSave = data.invulTarget === null ? data.saveTarget : Math.min(data.saveTarget, data.invulTarget);
 
-        // Stufe 2: Kritische Treffer, Lethal, Dev Wounds und Saves als exakte Wahrscheinlichkeiten modellieren.
         const hitBranches = buildHitBranchProbabilities(data);
         const woundOutcome = buildWoundOutcomeProbabilities(data);
         const saveFailProbability = (bestSave - 1) / 6;
@@ -1100,7 +1234,6 @@
 
         const perAttack = buildPerAttackDistributions(hitBranches, normalHit, autoWound, data.sustained);
 
-        // Stufe 3: Die identischen Einzelattacken über die Attackenverteilung falten.
         const totalHits = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.hits);
         const totalWounds = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.wounds);
         const totalUnsaved = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.unsaved);
@@ -1324,7 +1457,6 @@
 
         damageDistribution.forEach((probability, damage) => {
           if (probability < EPSILON) return;
-          // Der Nutzer wünscht lineares Durchreichen des Gesamtschadens über identische Modelle.
           const kills = Math.min(modelCount, Math.floor(damage / woundsPerModel));
           killDistribution[kills] += probability;
         });
@@ -1375,7 +1507,6 @@
 
         for (let firstRoll = 1; firstRoll <= 6; firstRoll += 1) {
           const initialProbability = 1 / 6;
-          // Re-Rolls werden genau einmal angewendet und nie erneut auf den Re-Roll.
           const shouldReroll =
             rerollMode === "ones"
               ? firstRoll === 1
