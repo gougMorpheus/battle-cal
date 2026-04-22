@@ -130,7 +130,8 @@
 
     .hero-meta,
     .distribution-meta,
-    .badge-row {
+    .badge-row,
+    .meta-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -184,10 +185,15 @@
     }
 
     .card-title h2,
-    .details-head h2 {
+    .details-head h2,
+    .section-title {
       margin: 0;
       font-size: 1.05rem;
       letter-spacing: -0.01em;
+    }
+
+    .section-title {
+      margin-bottom: 10px;
     }
 
     .muted {
@@ -268,6 +274,10 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
+    .button-row.compact {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     button {
       min-height: 52px;
       padding: 0 16px;
@@ -283,6 +293,11 @@
       border-color: rgba(127, 227, 197, 0.3);
       color: #effff9;
       font-weight: 700;
+    }
+
+    button.danger {
+      border-color: rgba(255, 125, 125, 0.3);
+      color: #ffd7d7;
     }
 
     details.card summary {
@@ -307,7 +322,8 @@
     }
 
     .error-box,
-    .note-box {
+    .note-box,
+    .toast {
       padding: 14px 16px;
       border-radius: 16px;
       line-height: 1.45;
@@ -323,6 +339,26 @@
       background: rgba(127, 227, 197, 0.08);
       border: 1px solid rgba(127, 227, 197, 0.16);
       color: var(--text-soft);
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      width: min(92vw, 420px);
+      background: rgba(20, 29, 41, 0.96);
+      border: 1px solid rgba(127, 227, 197, 0.22);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 140ms ease;
+    }
+
+    .toast.show {
+      opacity: 1;
     }
 
     .stats-grid {
@@ -369,7 +405,8 @@
       gap: 16px;
     }
 
-    .distribution-card {
+    .distribution-card,
+    .history-section {
       padding: 16px;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.02);
@@ -443,6 +480,11 @@
       white-space: nowrap;
     }
 
+    .history-card details,
+    .history-card {
+      box-shadow: none;
+    }
+
     .hidden {
       display: none !important;
     }
@@ -459,6 +501,10 @@
 
       .button-row {
         grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .button-row.compact {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
       .stats-grid {
@@ -482,7 +528,7 @@
 
     @media (min-width: 980px) {
       .container {
-        max-width: 1280px;
+        max-width: 1320px;
         padding: 24px;
       }
 
@@ -699,7 +745,7 @@
               <button type="button" id="resetBtn">Reset</button>
             </div>
             <div class="note-box">
-              Die Berechnung erfolgt ausschließlich nach Klick auf „Berechnen“.
+              Die Berechnung erfolgt ausschließlich nach Klick auf „Berechnen“. Ergebnisse werden als Historie gespeichert.
             </div>
           </div>
         </section>
@@ -712,13 +758,18 @@
     </div>
   </div>
 
+  <div id="toast" class="toast" aria-live="polite"></div>
+
   <script>
     (() => {
       "use strict";
 
       const EPSILON = 1e-12;
+      const HISTORY_KEY = "battle_cal_history_v2";
+      const HISTORY_LIMIT = 50;
       const hitWoundFaces = [1, 2, 3, 4, 5, 6];
       const saveFnpFaces = [2, 3, 4, 5, 6];
+
       const form = document.getElementById("calculatorForm");
       const errorContainer = document.getElementById("errorContainer");
       const resultContainer = document.getElementById("resultContainer");
@@ -726,6 +777,11 @@
       const damageFields = document.getElementById("damageFields");
       const exampleBtn = document.getElementById("exampleBtn");
       const resetBtn = document.getElementById("resetBtn");
+      const toast = document.getElementById("toast");
+
+      let historyEntries = [];
+      let nextSequence = 1;
+      let toastTimer = null;
 
       const fieldRefs = {
         attackMode: document.getElementById("attackMode"),
@@ -779,6 +835,8 @@
       renderModeFields("damage");
       wireUi();
       applyBaseProfile();
+      loadHistoryFromStorage();
+      renderHistory();
 
       function initSelects() {
         hitWoundFaces.forEach(value => {
@@ -820,20 +878,59 @@
 
         form.addEventListener("submit", event => {
           event.preventDefault();
-          calculateAndRender();
+          calculateAndStore();
         });
 
         exampleBtn.addEventListener("click", () => {
           applyExampleProfile();
           clearErrors();
-          resultContainer.innerHTML = "";
         });
 
         resetBtn.addEventListener("click", () => {
           applyBaseProfile();
           clearErrors();
-          resultContainer.innerHTML = "";
         });
+
+        resultContainer.addEventListener("click", handleHistoryAction);
+      }
+
+      function handleHistoryAction(event) {
+        const button = event.target.closest("[data-action]");
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const entryId = button.dataset.id || "";
+
+        if (action === "clear-history") {
+          if (window.confirm("Historie wirklich vollständig löschen?")) {
+            historyEntries = [];
+            saveHistoryToStorage();
+            renderHistory();
+            showToast("Historie gelöscht");
+          }
+          return;
+        }
+
+        const entry = historyEntries.find(item => item.id === entryId);
+        if (!entry) return;
+
+        if (action === "delete-entry") {
+          historyEntries = historyEntries.filter(item => item.id !== entryId);
+          saveHistoryToStorage();
+          renderHistory();
+          showToast("Eintrag gelöscht");
+          return;
+        }
+
+        if (action === "load-entry") {
+          applySnapshotToForm(entry.data);
+          showToast("Eingaben ins Formular geladen");
+          return;
+        }
+
+        if (action === "export-entry") {
+          exportEntry(entry);
+        }
       }
 
       function renderModeFields(kind) {
@@ -869,21 +966,21 @@
         fieldRefs.thresholdPercent.value = "65";
 
         fieldRefs.fnpEnabled.checked = false;
-        document.getElementById("fnpFields").classList.add("hidden");
         fieldRefs.fnpTarget.value = "5";
+        document.getElementById("fnpFields").classList.add("hidden");
 
         fieldRefs.sustainedEnabled.checked = false;
-        document.getElementById("sustainedFields").classList.add("hidden");
         fieldRefs.sustainedValue.value = "1";
         fieldRefs.sustainedCrit.value = "6";
+        document.getElementById("sustainedFields").classList.add("hidden");
 
         fieldRefs.lethalEnabled.checked = false;
-        document.getElementById("lethalFields").classList.add("hidden");
         fieldRefs.lethalCrit.value = "6";
+        document.getElementById("lethalFields").classList.add("hidden");
 
         fieldRefs.devEnabled.checked = false;
-        document.getElementById("devFields").classList.add("hidden");
         fieldRefs.devCrit.value = "6";
+        document.getElementById("devFields").classList.add("hidden");
 
         fieldRefs.hitReroll.value = "none";
         fieldRefs.woundReroll.value = "none";
@@ -931,17 +1028,86 @@
         fieldRefs.woundsPerModel.value = "3";
       }
 
-      function calculateAndRender() {
+      function applySnapshotToForm(data) {
+        fieldRefs.attackMode.value = data.attackMode;
+        renderModeFields("attack");
+        Object.entries(data.attackParams || {}).forEach(([key, value]) => {
+          const input = document.getElementById(key);
+          if (input) input.value = String(value);
+        });
+
+        fieldRefs.damageMode.value = data.damageMode;
+        renderModeFields("damage");
+        Object.entries(data.damageParams || {}).forEach(([key, value]) => {
+          const input = document.getElementById(key);
+          if (input) input.value = String(value);
+        });
+
+        fieldRefs.hitTarget.value = String(data.hitTarget);
+        fieldRefs.woundTarget.value = String(data.woundTarget);
+        fieldRefs.saveTarget.value = data.saveTarget === null ? "" : String(data.saveTarget);
+        fieldRefs.thresholdPercent.value = String(data.thresholdPercent);
+
+        fieldRefs.fnpEnabled.checked = !!data.fnp.enabled;
+        fieldRefs.fnpTarget.value = data.fnp.target ? String(data.fnp.target) : "5";
+        document.getElementById("fnpFields").classList.toggle("hidden", !fieldRefs.fnpEnabled.checked);
+
+        fieldRefs.sustainedEnabled.checked = !!data.sustained.enabled;
+        fieldRefs.sustainedValue.value = String(data.sustained.value ?? 1);
+        fieldRefs.sustainedCrit.value = String(data.sustained.crit ?? 6);
+        document.getElementById("sustainedFields").classList.toggle("hidden", !fieldRefs.sustainedEnabled.checked);
+
+        fieldRefs.lethalEnabled.checked = !!data.lethal.enabled;
+        fieldRefs.lethalCrit.value = String(data.lethal.crit ?? 6);
+        document.getElementById("lethalFields").classList.toggle("hidden", !fieldRefs.lethalEnabled.checked);
+
+        fieldRefs.devEnabled.checked = !!data.dev.enabled;
+        fieldRefs.devCrit.value = String(data.dev.crit ?? 6);
+        document.getElementById("devFields").classList.toggle("hidden", !fieldRefs.devEnabled.checked);
+
+        fieldRefs.hitReroll.value = data.hitReroll;
+        fieldRefs.woundReroll.value = data.woundReroll;
+
+        fieldRefs.modelCount.value = data.targetProfile ? String(data.targetProfile.modelCount) : "";
+        fieldRefs.woundsPerModel.value = data.targetProfile ? String(data.targetProfile.woundsPerModel) : "";
+      }
+
+      function calculateAndStore() {
         const validation = parseAndValidateInputs();
         if (!validation.ok) {
           renderErrors(validation.errors);
-          resultContainer.innerHTML = "";
           return;
         }
 
         clearErrors();
         const results = calculateAll(validation.data);
-        renderResults(validation.data, results);
+        const entry = createHistoryEntry(validation.data, results);
+        historyEntries.unshift(entry);
+        historyEntries = historyEntries.slice(0, HISTORY_LIMIT);
+        saveHistoryToStorage();
+        renderHistory();
+        showToast("Berechnung gespeichert");
+      }
+
+      function createHistoryEntry(data, results) {
+        return {
+          id: createId(),
+          sequence: nextSequence++,
+          createdAt: new Date().toISOString(),
+          data: cloneSerializable(data),
+          results: cloneSerializable(results)
+        };
+      }
+
+      function createId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        return `calc-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+      }
+
+      function cloneSerializable(value) {
+        return JSON.parse(JSON.stringify(value));
       }
 
       function parseAndValidateInputs() {
@@ -1362,13 +1528,6 @@
         return nextState;
       }
 
-      function formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount) {
-        const cappedDamage = Math.min(expectedEffectiveDamage, modelCount * woundsPerModel);
-        const kills = Math.min(modelCount, Math.floor(cappedDamage / woundsPerModel));
-        const remaining = kills >= modelCount ? 0 : cappedDamage - kills * woundsPerModel;
-        return `${kills} Kills + ${formatNumber(remaining)} LP`;
-      }
-
       function buildThresholdSummary(distribution, thresholdPercent) {
         const atLeast = thresholdValueForConfidence(distribution, thresholdPercent / 100);
         return { thresholdPercent, atLeast, probability: tailProbability(distribution, atLeast) };
@@ -1544,6 +1703,13 @@
         return kills * woundsPerModel + remainder;
       }
 
+      function formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount) {
+        const cappedDamage = Math.min(expectedEffectiveDamage, modelCount * woundsPerModel);
+        const kills = Math.min(modelCount, Math.floor(cappedDamage / woundsPerModel));
+        const remaining = kills >= modelCount ? 0 : cappedDamage - kills * woundsPerModel;
+        return `${kills} Kills + ${formatNumber(remaining)} LP`;
+      }
+
       function binomialDistribution(n, keepProbability) {
         const key = `${n}|${keepProbability.toFixed(8)}`;
         if (binomialCache.has(key)) return binomialCache.get(key).slice();
@@ -1555,13 +1721,126 @@
         return distribution;
       }
 
-      function renderResults(data, results) {
+      function loadHistoryFromStorage() {
+        try {
+          const raw = window.localStorage.getItem(HISTORY_KEY);
+          if (!raw) {
+            historyEntries = [];
+            nextSequence = 1;
+            return;
+          }
+
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) throw new Error("invalid history");
+
+          historyEntries = parsed
+            .filter(entry => entry && typeof entry === "object" && entry.id && entry.data && entry.results)
+            .sort((a, b) => (b.sequence || 0) - (a.sequence || 0))
+            .slice(0, HISTORY_LIMIT);
+
+          nextSequence = historyEntries.reduce((max, entry) => Math.max(max, Number(entry.sequence) || 0), 0) + 1;
+        } catch {
+          historyEntries = [];
+          nextSequence = 1;
+          try {
+            window.localStorage.removeItem(HISTORY_KEY);
+          } catch {}
+        }
+      }
+
+      function saveHistoryToStorage() {
+        try {
+          window.localStorage.setItem(HISTORY_KEY, JSON.stringify(historyEntries.slice(0, HISTORY_LIMIT)));
+        } catch {
+          showToast("Speichern der Historie fehlgeschlagen");
+        }
+      }
+
+      function renderHistory() {
+        if (!historyEntries.length) {
+          resultContainer.innerHTML = `
+            <section class="card panel">
+              <div class="card-title">
+                <h2>Historie</h2>
+                <span class="muted">Noch keine Berechnungen gespeichert</span>
+              </div>
+              <div class="note-box">Neue Ergebnisse werden nach Klick auf „Berechnen“ als lokale Historie gespeichert und beim nächsten Öffnen wieder angezeigt.</div>
+            </section>
+          `;
+          return;
+        }
+
         resultContainer.innerHTML = `
           <section class="card panel">
             <div class="card-title">
-              <h2>Block A · Erwartungswerte</h2>
-              <span class="muted">Durchschnittliche Resultate pro vollständigem Angriff</span>
+              <h2>Historie</h2>
+              <span class="muted">${historyEntries.length} gespeicherte Berechnung${historyEntries.length === 1 ? "" : "en"}, neueste zuerst</span>
             </div>
+            <div class="button-row compact">
+              <button type="button" data-action="clear-history" class="danger">Historie löschen</button>
+            </div>
+          </section>
+          ${historyEntries.map((entry, index) => renderHistoryCard(entry, index)).join("")}
+        `;
+      }
+
+      function renderHistoryCard(entry, index) {
+        return `
+          <details class="card history-card" ${index === 0 ? "open" : ""}>
+            <summary>
+              <div class="details-head">
+                <div>
+                  <h2>Berechnung #${entry.sequence}</h2>
+                  <div class="muted">${formatTimestamp(entry.createdAt)}</div>
+                </div>
+                <div class="meta-row">
+                  ${index === 0 ? `<span class="pill">Neueste</span>` : ""}
+                  <span class="pill">${escapeHtml(formatAttackModeLabel(entry.data))}</span>
+                  <span class="pill">${escapeHtml(formatDamageModeLabel(entry.data))}</span>
+                  <span class="pill"><span class="summary-arrow">▶</span>Details</span>
+                </div>
+              </div>
+            </summary>
+            <div class="details-body stack">
+              <div class="button-row compact">
+                <button type="button" data-action="export-entry" data-id="${entry.id}">Für Excel kopieren</button>
+                <button type="button" data-action="load-entry" data-id="${entry.id}">Ins Formular laden</button>
+                <button type="button" data-action="delete-entry" data-id="${entry.id}" class="danger">Eintrag löschen</button>
+              </div>
+              ${renderInputSection(entry.data)}
+              ${renderOutputSections(entry.data, entry.results)}
+            </div>
+          </details>
+        `;
+      }
+
+      function renderInputSection(data) {
+        return `
+          <section class="history-section">
+            <h3 class="section-title">Eingaben</h3>
+            <div class="list-stack">
+              ${renderKVRow("Attackenmodus", formatAttackModeLabel(data))}
+              ${renderKVRow("Trefferwert", `${data.hitTarget}+`)}
+              ${renderKVRow("Verwundungswert", `${data.woundTarget}+`)}
+              ${renderKVRow("Effektiver Save", data.saveTarget === null ? "Kein Save" : `${data.saveTarget}+`)}
+              ${renderKVRow("Schadensmodus", formatDamageModeLabel(data))}
+              ${renderKVRow("Zielwahrscheinlichkeit", `${data.thresholdPercent}%`)}
+              ${renderKVRow("Feel No Pain", data.fnp.enabled ? `${data.fnp.target}+` : "aus")}
+              ${renderKVRow("Trefferhagel", data.sustained.enabled ? `an · X ${data.sustained.value} · crit ${data.sustained.crit}+` : "aus")}
+              ${renderKVRow("Tödliche Treffer", data.lethal.enabled ? `an · crit ${data.lethal.crit}+` : "aus")}
+              ${renderKVRow("Re-Rolls Treffer", formatRerollLabel(data.hitReroll))}
+              ${renderKVRow("Re-Rolls Verwundung", formatRerollLabel(data.woundReroll))}
+              ${renderKVRow("Verheerende Verwundungen", data.dev.enabled ? `an · crit ${data.dev.crit}+` : "aus")}
+              ${renderKVRow("Zielprofil", data.targetProfile ? `${data.targetProfile.modelCount} Modelle · ${data.targetProfile.woundsPerModel} LP` : "nicht gesetzt")}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderOutputSections(data, results) {
+        return `
+          <section class="history-section">
+            <h3 class="section-title">Erwartungswerte</h3>
             <div class="stats-grid">
               ${renderStat("Treffer", results.expected.hits)}
               ${renderStat("Verwundungen", results.expected.wounds)}
@@ -1569,76 +1848,47 @@
               ${renderStat("Gesamtschaden", results.expected.damage)}
             </div>
             <div class="list-stack" style="margin-top:12px;">
-              <div class="list-row">
-                <span>Erwartete Attacken</span>
-                <span>${formatNumber(results.trace.attacks)}</span>
-              </div>
-              <div class="list-row">
-                <span>Erwartete Treffer = ${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.hits)} pro Attacke</span>
-                <span>${formatNumber(results.expected.hits)}</span>
-              </div>
-              <div class="list-row">
-                <span>Erwartete Verwundungen = ${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.wounds)} pro Attacke</span>
-                <span>${formatNumber(results.expected.wounds)}</span>
-              </div>
-              <div class="list-row">
-                <span>Erwartete unsaved wounds = ${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.unsaved)} pro Attacke</span>
-                <span>${formatNumber(results.expected.unsaved)}</span>
-              </div>
-              <div class="list-row">
-                <span>Schaden pro unsaved wound im Mittel</span>
-                <span>${formatNumber(results.trace.damagePerUnsaved)}</span>
-              </div>
-              <div class="list-row">
-                <span>Verwendeter Save</span>
-                <span>${escapeHtml(results.trace.saveLabel)}${results.trace.saveLabel === "Kein Save" ? " · 100,0 % fail" : ` · ${formatPercent(results.trace.saveFail)} fail`}</span>
-              </div>
-              <div class="list-row">
-                <span>Erwarteter Gesamtschaden = ${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.damage)} pro Attacke</span>
-                <span>${formatNumber(results.expected.damage)}</span>
-              </div>
+              ${renderKVRow("Erwartete Attacken", formatNumber(results.trace.attacks))}
+              ${renderKVRow("Erwartete Treffer", `${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.hits)} = ${formatNumber(results.expected.hits)}`)}
+              ${renderKVRow("Erwartete Verwundungen", `${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.wounds)} = ${formatNumber(results.expected.wounds)}`)}
+              ${renderKVRow("Erwartete unsaved wounds", `${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.unsaved)} = ${formatNumber(results.expected.unsaved)}`)}
+              ${renderKVRow("Schaden pro unsaved wound im Mittel", formatNumber(results.trace.damagePerUnsaved))}
+              ${renderKVRow("Verwendeter Save", `${results.trace.saveLabel}${results.trace.saveLabel === "Kein Save" ? " · 100,0 % fail" : ` · ${formatPercent(results.trace.saveFail)} fail`}`)}
+              ${renderKVRow("Erwarteter Gesamtschaden", `${formatNumber(results.trace.attacks)} × ${formatNumber(results.trace.perAttack.damage)} = ${formatNumber(results.expected.damage)}`)}
             </div>
           </section>
 
-          <section class="card panel">
-            <div class="card-title">
-              <h2>Block B · Unsaved Wounds</h2>
-              <span class="muted">Schwellenwert und zentraler Korridor</span>
-            </div>
+          <section class="history-section">
+            <h3 class="section-title">Unsaved Wounds</h3>
             <div class="list-stack">
-              <div class="list-row">
-                <span>Mit ${results.thresholds.unsaved.thresholdPercent}% Wahrscheinlichkeit kommen mindestens ${results.thresholds.unsaved.atLeast} unsaved wounds durch.</span>
-                <span>${formatPercent(results.thresholds.unsaved.probability)}</span>
-              </div>
-              <div class="list-row">
-                <span>Mit ${results.corridors.unsaved.thresholdPercent}% Wahrscheinlichkeit liegen die unsaved wounds zwischen ${results.corridors.unsaved.lower} und ${results.corridors.unsaved.upper}.</span>
-                <span>${formatPercent(results.corridors.unsaved.probability)}</span>
-              </div>
+              ${renderKVRow(`Mindestens-Schwelle (${results.thresholds.unsaved.thresholdPercent}%)`, `mindestens ${results.thresholds.unsaved.atLeast} · ${formatPercent(results.thresholds.unsaved.probability)}`)}
+              ${renderKVRow(`Korridor (${results.corridors.unsaved.thresholdPercent}%)`, `${results.corridors.unsaved.lower} bis ${results.corridors.unsaved.upper} · ${formatPercent(results.corridors.unsaved.probability)}`)}
+              ${results.unsavedAtLeastList.map(entry => renderKVRow(`Mindestens ${entry.value} unsaved wounds`, formatPercent(entry.probability))).join("")}
             </div>
           </section>
 
-          <section class="card panel">
-            <div class="card-title">
-              <h2>Unsaved Wounds · Mindestens-Liste</h2>
-              <span class="muted">Chance für mindestens 1 bis n unsaved wounds</span>
-            </div>
-            <div class="list-stack">
-              ${results.unsavedAtLeastList.map(entry => `
-                <div class="list-row">
-                  <span>Mindestens ${entry.value} unsaved wounds</span>
-                  <span>${formatPercent(entry.probability)}</span>
+          ${results.killResults ? `
+            <section class="history-section">
+              <h3 class="section-title">Kills</h3>
+              <div class="stats-grid">
+                <div class="stat">
+                  <small>Erwarteter Kill-Output</small>
+                  <strong>${escapeHtml(results.killResults.expectedKillOutput)}</strong>
                 </div>
-              `).join("")}
-            </div>
-          </section>
+                <div class="stat">
+                  <small>Modelle im Ziel</small>
+                  <strong>${data.targetProfile.modelCount}</strong>
+                </div>
+              </div>
+              <div class="list-stack" style="margin-top:12px;">
+                ${renderKVRow(`Kill-Korridor (${results.killResults.corridor.thresholdPercent}%)`, `${results.killResults.corridor.lower} bis ${results.killResults.corridor.upper} · ${formatPercent(results.killResults.corridor.probability)}`)}
+                ${results.killResults.chances.map(entry => renderKVRow(entry.kills === data.targetProfile.modelCount ? "Gesamte Einheit töten" : `Mindestens ${entry.kills} Modell${entry.kills === 1 ? "" : "e"} töten`, formatPercent(entry.probability))).join("")}
+              </div>
+            </section>
+          ` : ""}
 
-          ${results.killResults ? renderKillBlock(results.killResults, data.targetProfile) : ""}
-
-          <section class="card panel">
-            <div class="card-title">
-              <h2>Block D · Verteilungen</h2>
-              <span class="muted">Nur unsaved wounds und Kills</span>
-            </div>
+          <section class="history-section">
+            <h3 class="section-title">Verteilungen</h3>
             <div class="distribution-grid">
               ${renderDistribution("Unsaved Wounds", results.distributions.unsaved, results.expected.unsaved, results.thresholds.unsaved.atLeast, data.thresholdPercent)}
               ${results.killResults ? renderDistribution("Kills", results.distributions.kills, expectedValue(results.distributions.kills), thresholdValueForConfidence(results.distributions.kills, data.thresholdPercent / 100), data.thresholdPercent) : ""}
@@ -1647,36 +1897,12 @@
         `;
       }
 
-      function renderKillBlock(killResults, targetProfile) {
+      function renderKVRow(label, value) {
         return `
-          <section class="card panel">
-            <div class="card-title">
-              <h2>Block C · Ziel-Wahrscheinlichkeiten</h2>
-              <span class="muted">${targetProfile.modelCount} Modelle mit je ${targetProfile.woundsPerModel} LP</span>
-            </div>
-            <div class="stats-grid">
-              <div class="stat">
-                <small>Erwarteter Kill-Output</small>
-                <strong>${killResults.expectedKillOutput}</strong>
-              </div>
-              <div class="stat">
-                <small>Modelle im Ziel</small>
-                <strong>${targetProfile.modelCount}</strong>
-              </div>
-            </div>
-            <div class="list-stack" style="margin-top:12px;">
-              <div class="list-row">
-                <span>Mit ${killResults.corridor.thresholdPercent}% Wahrscheinlichkeit liegen die Kills zwischen ${killResults.corridor.lower} und ${killResults.corridor.upper}.</span>
-                <span>${formatPercent(killResults.corridor.probability)}</span>
-              </div>
-              ${killResults.chances.map(entry => `
-                <div class="list-row">
-                  <span>${entry.kills === targetProfile.modelCount ? "Gesamte Einheit töten" : `Mindestens ${entry.kills} Modell${entry.kills === 1 ? "" : "e"} töten`}</span>
-                  <span>${formatPercent(entry.probability)}</span>
-                </div>
-              `).join("")}
-            </div>
-          </section>
+          <div class="list-row">
+            <span>${escapeHtml(label)}</span>
+            <span>${escapeHtml(value)}</span>
+          </div>
         `;
       }
 
@@ -1693,32 +1919,6 @@
         const maxProbability = distribution.reduce((max, probability) => Math.max(max, probability), EPSILON);
         const expectedAnchor = Math.max(0, Math.min(distribution.length - 1, Math.round(expected)));
 
-        const rows = distribution.map((probability, value) => {
-          const barWidth = `${(probability / maxProbability) * 100}%`;
-          const rowClasses = [
-            "dist-row",
-            value === thresholdValue ? "is-threshold" : "",
-            value === expectedAnchor ? "is-expected" : ""
-          ].filter(Boolean).join(" ");
-
-          const badges = [];
-          if (value === thresholdValue) badges.push(`<span class="badge threshold">${thresholdPercent}% Schwelle</span>`);
-          if (value === expectedAnchor) badges.push(`<span class="badge">EV ~ ${expectedAnchor}</span>`);
-
-          return `
-            <div class="${rowClasses}">
-              <div class="dist-label">${value}</div>
-              <div>
-                <div class="dist-bar">
-                  <div class="dist-fill" style="width:${barWidth};"></div>
-                </div>
-                ${badges.length ? `<div class="badge-row">${badges.join("")}</div>` : ""}
-              </div>
-              <div class="dist-prob">${formatPercent(probability)}</div>
-            </div>
-          `;
-        }).join("");
-
         return `
           <div class="distribution-card">
             <h3>${escapeHtml(title)}</h3>
@@ -1727,10 +1927,197 @@
               <span class="pill">${thresholdPercent}% Schwelle: mindestens ${thresholdValue}</span>
             </div>
             <div class="distribution-scroll">
-              ${rows}
+              ${distribution.map((probability, value) => {
+                const rowClasses = [
+                  "dist-row",
+                  value === thresholdValue ? "is-threshold" : "",
+                  value === expectedAnchor ? "is-expected" : ""
+                ].filter(Boolean).join(" ");
+                const badges = [];
+                if (value === thresholdValue) badges.push(`<span class="badge threshold">${thresholdPercent}% Schwelle</span>`);
+                if (value === expectedAnchor) badges.push(`<span class="badge">EV ~ ${expectedAnchor}</span>`);
+                return `
+                  <div class="${rowClasses}">
+                    <div class="dist-label">${value}</div>
+                    <div>
+                      <div class="dist-bar">
+                        <div class="dist-fill" style="width:${(probability / maxProbability) * 100}%"></div>
+                      </div>
+                      ${badges.length ? `<div class="badge-row">${badges.join("")}</div>` : ""}
+                    </div>
+                    <div class="dist-prob">${formatPercent(probability)}</div>
+                  </div>
+                `;
+              }).join("")}
             </div>
           </div>
         `;
+      }
+
+      function renderHistoryHeaderExportFields(entry) {
+        return {
+          id: entry.id,
+          sequence: entry.sequence,
+          createdAt: entry.createdAt
+        };
+      }
+
+      function exportEntry(entry) {
+        const csvLine = buildCsvLine(entry);
+        copyTextToClipboard(csvLine).then(success => {
+          showToast(success ? "In Zwischenablage kopiert" : "Kopieren fehlgeschlagen");
+        });
+      }
+
+      function buildCsvLine(entry) {
+        const data = entry.data;
+        const results = entry.results;
+        const exportData = {
+          id: renderHistoryHeaderExportFields(entry).id,
+          sequence: renderHistoryHeaderExportFields(entry).sequence,
+          timestamp: renderHistoryHeaderExportFields(entry).createdAt,
+          attack_mode: formatAttackModeLabel(data),
+          attack_fixed: data.attackParams.attackFixed || "",
+          attack_x: data.attackParams.attackX || "",
+          attack_y: data.attackParams.attackY || "",
+          hit_target: data.hitTarget,
+          wound_target: data.woundTarget,
+          effective_save: data.saveTarget === null ? "Kein Save" : `${data.saveTarget}+`,
+          damage_mode: formatDamageModeLabel(data),
+          damage_fixed: data.damageParams.damageFixed || "",
+          damage_x: data.damageParams.damageX || "",
+          threshold_percent: data.thresholdPercent,
+          fnp_enabled: data.fnp.enabled ? "ja" : "nein",
+          fnp_target: data.fnp.target || "",
+          sustained_enabled: data.sustained.enabled ? "ja" : "nein",
+          sustained_value: data.sustained.value || "",
+          sustained_crit: data.sustained.crit || "",
+          lethal_enabled: data.lethal.enabled ? "ja" : "nein",
+          lethal_crit: data.lethal.crit || "",
+          hit_reroll: formatRerollLabel(data.hitReroll),
+          wound_reroll: formatRerollLabel(data.woundReroll),
+          dev_enabled: data.dev.enabled ? "ja" : "nein",
+          dev_crit: data.dev.crit || "",
+          target_models: data.targetProfile ? data.targetProfile.modelCount : "",
+          target_wounds_per_model: data.targetProfile ? data.targetProfile.woundsPerModel : "",
+          expected_hits: formatExportNumber(results.expected.hits),
+          expected_wounds: formatExportNumber(results.expected.wounds),
+          expected_unsaved: formatExportNumber(results.expected.unsaved),
+          expected_damage: formatExportNumber(results.expected.damage),
+          expected_kills_output: results.killResults ? results.killResults.expectedKillOutput : "",
+          unsaved_threshold_at_least: results.thresholds.unsaved.atLeast,
+          unsaved_threshold_probability: formatExportNumber(results.thresholds.unsaved.probability),
+          unsaved_corridor_lower: results.corridors.unsaved.lower,
+          unsaved_corridor_upper: results.corridors.unsaved.upper,
+          unsaved_corridor_probability: formatExportNumber(results.corridors.unsaved.probability),
+          kill_corridor_lower: results.killResults ? results.killResults.corridor.lower : "",
+          kill_corridor_upper: results.killResults ? results.killResults.corridor.upper : "",
+          kill_corridor_probability: results.killResults ? formatExportNumber(results.killResults.corridor.probability) : "",
+          unsaved_at_least_list: results.unsavedAtLeastList.map(item => `>=${item.value}:${formatPercent(item.probability)}`).join("; "),
+          kill_chance_list: results.killResults ? results.killResults.chances.map(item => `${item.kills === data.targetProfile.modelCount ? "unit" : `>=${item.kills}`}:${formatPercent(item.probability)}`).join("; ") : ""
+        };
+
+        return Object.values(exportData).map(csvEscape).join(",");
+      }
+
+      async function copyTextToClipboard(text) {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch {}
+
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          textarea.style.pointerEvents = "none";
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          const success = document.execCommand("copy");
+          document.body.removeChild(textarea);
+          return success;
+        } catch {
+          return false;
+        }
+      }
+
+      function csvEscape(value) {
+        const stringValue = String(value ?? "");
+        if (/[",\n\r]/.test(stringValue)) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      }
+
+      function showToast(message) {
+        if (!toast) return;
+        toast.textContent = message;
+        toast.classList.add("show");
+        if (toastTimer) window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => {
+          toast.classList.remove("show");
+        }, 1800);
+      }
+
+      function formatAttackModeLabel(data) {
+        switch (data.attackMode) {
+          case "fix":
+            return `fix ${data.attackParams.attackFixed}`;
+          case "xw3":
+            return `${data.attackParams.attackX} · W3`;
+          case "xw6":
+            return `${data.attackParams.attackX} · W6`;
+          case "xw3y":
+            return `${data.attackParams.attackX} · (W3 + ${data.attackParams.attackY})`;
+          case "xw6y":
+            return `${data.attackParams.attackX} · (W6 + ${data.attackParams.attackY})`;
+          default:
+            return data.attackMode;
+        }
+      }
+
+      function formatDamageModeLabel(data) {
+        switch (data.damageMode) {
+          case "fix":
+            return `fix ${data.damageParams.damageFixed}`;
+          case "w3":
+            return "W3";
+          case "w6":
+            return "W6";
+          case "w3x":
+            return `W3 + ${data.damageParams.damageX}`;
+          case "w6x":
+            return `W6 + ${data.damageParams.damageX}`;
+          default:
+            return data.damageMode;
+        }
+      }
+
+      function formatRerollLabel(value) {
+        switch (value) {
+          case "ones":
+            return "1er";
+          case "failed":
+            return "misslungen";
+          default:
+            return "keine";
+        }
+      }
+
+      function formatTimestamp(isoString) {
+        try {
+          return new Date(isoString).toLocaleString("de-DE", {
+            dateStyle: "short",
+            timeStyle: "medium"
+          });
+        } catch {
+          return isoString;
+        }
       }
 
       function formatNumber(value) {
@@ -1738,6 +2125,10 @@
           minimumFractionDigits: 0,
           maximumFractionDigits: 2
         });
+      }
+
+      function formatExportNumber(value) {
+        return Number(value).toFixed(6).replace(/\.?0+$/, "");
       }
 
       function formatPercent(value) {
