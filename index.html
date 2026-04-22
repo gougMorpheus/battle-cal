@@ -1228,6 +1228,18 @@
             return;
           }
 
+          if (action === "rename") {
+            const currentIndex = historyEntries.findIndex(item => item.id === entry.id);
+            const currentTitle = buildHistoryTitle(entry, currentIndex);
+            const nextTitle = window.prompt("Neue Bezeichnung für dieses Ergebnis:", currentTitle);
+            if (nextTitle === null) return;
+            entry.customTitle = String(nextTitle).trim();
+            saveHistory();
+            renderHistory();
+            showToast(entry.customTitle ? "Bezeichnung aktualisiert." : "Bezeichnung auf Standard zurückgesetzt.");
+            return;
+          }
+
           if (action === "export") {
             const success = await copyToClipboard(buildCsvRow(entry));
             showToast(success ? "In Zwischenablage kopiert." : "Kopieren fehlgeschlagen.");
@@ -1386,6 +1398,7 @@
         const newEntry = {
           id: createId(),
           createdAt: new Date().toISOString(),
+          customTitle: "",
           inputs: parsed.data,
           outputs
         };
@@ -1959,6 +1972,7 @@
               <div class="history-body">
                 <div class="history-actions">
                   <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
+                  <button type="button" class="ghost" data-action="rename" data-id="${entry.id}">Name</button>
                   <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
                   <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
                 </div>
@@ -2192,6 +2206,10 @@
       }
 
       function buildHistoryTitle(entry, index) {
+        return entry.customTitle?.trim() || buildDefaultHistoryTitle(entry, index);
+      }
+
+      function buildDefaultHistoryTitle(entry, index) {
         return `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`}, ${labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams)} #${historyEntries.length - index}`;
       }
 
@@ -2317,6 +2335,7 @@
       function buildCsvRow(entry) {
         const row = {
           id: entry.id,
+          bezeichnung: entry.customTitle || "",
           zeit: formatDate(entry.createdAt),
           attackenmodus: labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams),
           trefferwert: `${entry.inputs.hitTarget}+`,
