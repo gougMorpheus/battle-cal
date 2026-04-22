@@ -2446,6 +2446,52 @@
         }
       }
 
+      function renderHistoryCard(entry, index) {
+        const title = buildHistoryTitle(entry, index);
+        return `
+          <article class="card history-card">
+            <details class="history-details" ${openHistoryId === entry.id ? "open" : ""}>
+              <summary>
+                <div class="history-head">
+                  <div>
+                    <h3>${escapeHtml(title)}</h3>
+                    <div class="muted">${formatDate(entry.createdAt)}</div>
+                  </div>
+                  <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
+                </div>
+              </summary>
+
+              <div class="history-body">
+                <div class="history-actions">
+                  <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
+                  <button type="button" class="ghost" data-action="rename" data-id="${entry.id}">Name</button>
+                  <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
+                  <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
+                </div>
+
+                <details class="section-details">
+                  <summary>
+                    <div class="meta-row">
+                      <span class="pill"><span class="summary-arrow">▶</span>Eingaben</span>
+                    </div>
+                  </summary>
+                  <div class="section-details-body">
+                    <div class="list-stack">
+                      ${renderInputsSummary(entry.inputs)}
+                    </div>
+                  </div>
+                </details>
+
+                <div class="stack">
+                  ${renderOutputSections(entry.outputs)}
+                  ${entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : ""}
+                </div>
+              </div>
+            </details>
+          </article>
+        `;
+      }
+
       function csvQuote(value) {
         const text = String(value ?? "");
         return `"${text.replaceAll('"', '""')}"`;
