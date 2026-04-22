@@ -564,6 +564,10 @@
       padding-bottom: 14px;
     }
 
+    .standalone-action {
+      margin-top: 10px;
+    }
+
     .flat-section {
       display: grid;
       gap: 12px;
@@ -673,6 +677,29 @@
 
     .hidden {
       display: none !important;
+    }
+
+    .distribution-hint {
+      margin-bottom: 10px;
+      color: var(--text-dim);
+      font-size: 0.84rem;
+    }
+
+    .prob-line {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .prob-line strong {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .prob-line small {
+      font-size: 0.82rem;
+      color: var(--text-dim);
     }
 
     @media (min-width: 760px) {
@@ -802,12 +829,7 @@
 
           <div class="button-row core-actions desktop-actions">
             <button type="submit" class="primary">Berechnen</button>
-            <button type="button" id="exampleBtn">Beispielprofil</button>
             <button type="button" id="resetBtn">Reset</button>
-          </div>
-
-          <div class="button-row core-actions single mobile-only">
-            <button type="button" id="mobileExampleBtn">Beispielprofil</button>
           </div>
         </section>
 
@@ -908,6 +930,27 @@
                   </div>
                 </div>
               </div>
+
+              <details class="section-details" id="targetProfileDetails">
+                <summary>
+                  <div class="summary-head">
+                    <span class="pill"><span class="summary-arrow">▶</span>Zielprofil</span>
+                    <span class="section-summary-text" id="targetProfileSummary">aus</span>
+                  </div>
+                </summary>
+                <div class="section-details-body">
+                  <div class="grid two">
+                    <div class="field">
+                      <label for="modelCount">Anzahl Modelle</label>
+                      <input id="modelCount" type="number" min="1" step="1" inputmode="numeric" placeholder="z. B. 5" />
+                    </div>
+                    <div class="field">
+                      <label for="woundsPerModel">Lebenspunkte pro Modell</label>
+                      <input id="woundsPerModel" type="number" min="1" step="1" inputmode="numeric" placeholder="z. B. 3" />
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
           </details>
         </section>
@@ -934,19 +977,9 @@
             </div>
           </details>
 
-        <section class="card secondary-card panel input-actions-card">
-          <div class="card-title">
-            <div>
-              <span class="section-kicker">Aktionen</span>
-              <h2>Berechnung</h2>
-            </div>
-          </div>
-          <div class="stack">
-            <div class="button-row single">
-              <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
-            </div>
-          </div>
-        </section>
+        <div class="standalone-action">
+          <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
+        </div>
       </form>
 
       <section class="results-shell">
@@ -1028,8 +1061,6 @@
         devCrit: document.getElementById("devCrit"),
         modelCount: document.getElementById("modelCount"),
         woundsPerModel: document.getElementById("woundsPerModel"),
-        exampleBtn: document.getElementById("exampleBtn"),
-        mobileExampleBtn: document.getElementById("mobileExampleBtn"),
         resetBtn: document.getElementById("resetBtn"),
         stickyResetBtn: document.getElementById("stickyResetBtn"),
         clearHistoryBtn: document.getElementById("clearHistoryBtn")
@@ -1106,16 +1137,6 @@
         ids.form.addEventListener("submit", event => {
           event.preventDefault();
           calculateAndStore();
-        });
-
-        ids.exampleBtn.addEventListener("click", () => {
-          applyExampleProfile();
-          clearErrors();
-        });
-
-        ids.mobileExampleBtn.addEventListener("click", () => {
-          applyExampleProfile();
-          clearErrors();
         });
 
         ids.resetBtn.addEventListener("click", () => {
@@ -2009,7 +2030,7 @@
                     <h3>Berechnung #${historyEntries.length - index}</h3>
                     <div class="muted">${formatDate(entry.createdAt)}</div>
                   </div>
-                  ${latest ? `<span class="pill latest"><span class="summary-arrow">▶</span>Neueste</span>` : `<span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>`}
+                  <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
                 </div>
               </summary>
 
@@ -2080,8 +2101,8 @@
           <section class="mini-card">
             <div class="card-title">
               <h3>Unsaved Wounds</h3>
-              <span class="muted">Kompakte Wahrscheinlichkeiten</span>
             </div>
+            <div class="distribution-hint">X: min (genau X)</div>
             <div class="min-list">
               ${unsavedRows || `<div class="list-row"><span>genau 0: 100,0 %</span></div>`}
             </div>
@@ -2108,6 +2129,7 @@
                 <strong>${killResults.expectedKillOutput}</strong>
               </div>
             </div>
+            <div class="distribution-hint">X: min (genau X)</div>
             <div class="kill-list" style="margin-top:12px;">
               ${rows}
             </div>
@@ -2206,13 +2228,13 @@
         const rows = [];
         rows.push(`
           <div class="list-row">
-            <span>genau 0: ${formatPercent(exactProbability(distribution, 0))}</span>
+            <span class="prob-line">0: <strong>${formatPercent(tailProbability(distribution, 0))}</strong> <small>(${formatPercent(exactProbability(distribution, 0))})</small></span>
           </div>
         `);
         for (let value = startValue; value <= endValue; value += 1) {
           rows.push(`
             <div class="list-row">
-              <span>min ${value}: ${formatPercent(tailProbability(distribution, value))} / genau ${value}: ${formatPercent(exactProbability(distribution, value))}</span>
+              <span class="prob-line">${value}: <strong>${formatPercent(tailProbability(distribution, value))}</strong> <small>(${formatPercent(exactProbability(distribution, value))})</small></span>
             </div>
           `);
         }
