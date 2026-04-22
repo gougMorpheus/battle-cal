@@ -361,6 +361,11 @@
       margin-top: 10px;
     }
 
+    .standalone-action-group {
+      display: grid;
+      gap: 8px;
+    }
+
     .toast,
     .note-box,
     .error-box {
@@ -996,8 +1001,11 @@
           </details>
         </section>
 
-        <div class="standalone-action">
+        <div class="standalone-action standalone-action-group">
+          <button type="button" id="exportHistoryBtn">Historie exportieren</button>
+          <button type="button" id="importHistoryBtn">Historie einlesen</button>
           <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
+          <input type="file" id="importHistoryFile" accept="application/json,.json" class="hidden" />
         </div>
       </form>
 
@@ -1092,6 +1100,9 @@
         compareTableContainer: document.getElementById("compareTableContainer"),
         compareSelectionInfo: document.getElementById("compareSelectionInfo"),
         floatingHistoryToggle: document.getElementById("floatingHistoryToggle"),
+        exportHistoryBtn: document.getElementById("exportHistoryBtn"),
+        importHistoryBtn: document.getElementById("importHistoryBtn"),
+        importHistoryFile: document.getElementById("importHistoryFile"),
         attackMode: document.getElementById("attackMode"),
         attackFields: document.getElementById("attackFields"),
         hitTarget: document.getElementById("hitTarget"),
@@ -1310,6 +1321,21 @@
             uiState[detail.id] = detail.open;
             saveUiState();
           });
+        });
+
+        ids.exportHistoryBtn.addEventListener("click", () => {
+          exportWholeHistory();
+        });
+
+        ids.importHistoryBtn.addEventListener("click", () => {
+          ids.importHistoryFile.click();
+        });
+
+        ids.importHistoryFile.addEventListener("change", async event => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          await importWholeHistory(file);
+          ids.importHistoryFile.value = "";
         });
       }
 
@@ -2334,6 +2360,28 @@
         } catch {}
       }
 
+      function exportWholeHistory() {
+        try {
+          const payload = {
+            exportedAt: new Date().toISOString(),
+            version: 1,
+            entries: historyEntries
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `40k-battle-calculator-history-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          showToast("Historie exportiert.");
+        } catch {
+          showToast("Historie-Export fehlgeschlagen.");
+        }
+      }
+
       function loadHistory() {
         try {
           const raw = localStorage.getItem(HISTORY_KEY);
@@ -2343,6 +2391,62 @@
         } catch {
           return [];
         }
+      }
+
+      async function importWholeHistory(file) {
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const importedEntries = normalizeImportedHistory(parsed);
+
+          if (!importedEntries.length) {
+            showToast("Keine gültigen Historien-Einträge gefunden.");
+            return;
+          }
+
+          const existingIds = new Set(historyEntries.map(entry => entry.id));
+          const newEntries = importedEntries.filter(entry => !existingIds.has(entry.id));
+
+          if (!newEntries.length) {
+            showToast("Keine neuen Historien-Einträge importiert.");
+            return;
+          }
+
+          historyEntries = [...historyEntries, ...newEntries]
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, HISTORY_LIMIT);
+
+          saveHistory();
+          renderHistory();
+          showToast(`${newEntries.length} Eintrag${newEntries.length === 1 ? "" : "e"} importiert.`);
+        } catch {
+          showToast("Historie konnte nicht eingelesen werden.");
+        }
+      }
+
+      function normalizeImportedHistory(parsed) {
+        const rawEntries = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.entries) ? parsed.entries : [];
+        return rawEntries
+          .filter(entry => entry && typeof entry === "object" && entry.id && entry.createdAt && entry.inputs && entry.outputs)
+          .map(entry => ({
+            id: String(entry.id),
+            createdAt: String(entry.createdAt),
+            customTitle: String(entry.customTitle || ""),
+            inputs: normalizeImportedInputs(entry.inputs),
+            outputs: entry.outputs
+          }))
+          .filter(entry => entry.inputs !== null);
+      }
+
+      function normalizeImportedInputs(inputs) {
+        if (!inputs || typeof inputs !== "object") return null;
+        return {
+          ...inputs,
+          preDamage: {
+            enabled: Boolean(inputs.preDamage?.enabled),
+            value: Number(inputs.preDamage?.value || 0)
+          }
+        };
       }
 
       function saveUiState() {
