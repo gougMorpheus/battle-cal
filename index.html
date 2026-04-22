@@ -447,18 +447,22 @@
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
     }
 
     .stat small {
-      display: block;
       color: var(--text-dim);
-      margin-bottom: 7px;
+      margin: 0;
+      font-size: 0.9rem;
     }
 
     .stat strong {
-      display: block;
-      font-size: clamp(1.12rem, 5vw, 1.45rem);
-      letter-spacing: -0.03em;
+      display: inline;
+      font-size: 1rem;
+      letter-spacing: 0;
     }
 
     .distribution-hint {
@@ -519,6 +523,23 @@
       min-height: 46px;
     }
 
+    .floating-history-toggle {
+      position: fixed;
+      right: 12px;
+      bottom: 78px;
+      z-index: 29;
+      width: auto;
+      min-width: 0;
+      min-height: 42px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(11, 15, 20, 0.94);
+      color: var(--text);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(14px);
+    }
+
     @media (min-width: 760px) {
       body { padding-bottom: 32px; }
       .container { padding: 20px; }
@@ -526,6 +547,7 @@
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .desktop-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .sticky-bar { display: none; }
+      .floating-history-toggle { bottom: 20px; }
     }
 
     @media (min-width: 980px) {
@@ -746,6 +768,8 @@
     <button type="button" id="stickyResetBtn">Reset</button>
   </div>
 
+  <button type="button" id="floatingHistoryToggle" class="floating-history-toggle hidden">Ergebnis schließen</button>
+
   <script>
     (() => {
       "use strict";
@@ -786,6 +810,7 @@
         toast: document.getElementById("toast"),
         errorContainer: document.getElementById("errorContainer"),
         historyContainer: document.getElementById("historyContainer"),
+        floatingHistoryToggle: document.getElementById("floatingHistoryToggle"),
         attackMode: document.getElementById("attackMode"),
         attackFields: document.getElementById("attackFields"),
         hitTarget: document.getElementById("hitTarget"),
@@ -821,6 +846,7 @@
 
       let historyEntries = loadHistory();
       let uiState = loadUiState();
+      let openHistoryId = historyEntries[0]?.id || null;
 
       initSelects();
       renderModeFields("attack");
@@ -946,6 +972,12 @@
             renderHistory();
             showToast("Eintrag gelöscht.");
           }
+        });
+
+        ids.floatingHistoryToggle.addEventListener("click", () => {
+          if (!openHistoryId) return;
+          openHistoryId = null;
+          renderHistory();
         });
 
         [ids.specialRulesDetails, ids.targetProfileDetails].forEach(detail => {
@@ -1610,16 +1642,19 @@
         }
 
         ids.historyContainer.innerHTML = historyEntries.map((entry, index) => renderHistoryCard(entry, index)).join("");
+        wireHistoryDetails();
+        updateFloatingHistoryToggle();
       }
 
       function renderHistoryCard(entry, index) {
+        const title = `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`} #${historyEntries.length - index}`;
         return `
           <article class="card history-card">
-            <details class="history-details" ${index === 0 ? "open" : ""}>
+            <details class="history-details" data-history-id="${entry.id}" ${openHistoryId === entry.id ? "open" : ""}>
               <summary>
                 <div class="history-head">
                   <div>
-                    <h3>Berechnung #${historyEntries.length - index}</h3>
+                    <h3>${escapeHtml(title)}</h3>
                     <div class="muted">${formatDate(entry.createdAt)}</div>
                   </div>
                   <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
@@ -1654,6 +1689,28 @@
             </details>
           </article>
         `;
+      }
+
+      function wireHistoryDetails() {
+        const detailsList = Array.from(ids.historyContainer.querySelectorAll(".history-details"));
+        detailsList.forEach(detail => {
+          detail.addEventListener("toggle", () => {
+            const id = detail.getAttribute("data-history-id");
+            if (detail.open) {
+              openHistoryId = id;
+              detailsList.forEach(other => {
+                if (other !== detail) other.open = false;
+              });
+            } else if (openHistoryId === id) {
+              openHistoryId = null;
+            }
+            updateFloatingHistoryToggle();
+          });
+        });
+      }
+
+      function updateFloatingHistoryToggle() {
+        ids.floatingHistoryToggle.classList.toggle("hidden", !openHistoryId);
       }
 
       function renderOutputSections(outputs) {
