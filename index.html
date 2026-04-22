@@ -955,6 +955,22 @@
                   </div>
                 </div>
               </div>
+
+              <div class="inline-toggle">
+                <div class="toggle-head">
+                  <label class="toggle-label" for="preDamageEnabled">
+                    <input id="preDamageEnabled" type="checkbox" />
+                    Vorschädigung
+                  </label>
+                  <span class="muted">Wirkt vor dem eigentlichen Angriff auf das Zielprofil</span>
+                </div>
+                <div id="preDamageFields" class="subgrid hidden">
+                  <div class="field">
+                    <label for="preDamageValue">Vorschädigung gesamt</label>
+                    <input id="preDamageValue" type="number" min="1" step="1" inputmode="numeric" />
+                  </div>
+                </div>
+              </div>
             </div>
           </details>
 
@@ -1102,6 +1118,9 @@
         fnpEnabled: document.getElementById("fnpEnabled"),
         fnpFields: document.getElementById("fnpFields"),
         fnpTarget: document.getElementById("fnpTarget"),
+        preDamageEnabled: document.getElementById("preDamageEnabled"),
+        preDamageFields: document.getElementById("preDamageFields"),
+        preDamageValue: document.getElementById("preDamageValue"),
         modelCount: document.getElementById("modelCount"),
         woundsPerModel: document.getElementById("woundsPerModel"),
         resetBtn: document.getElementById("resetBtn"),
@@ -1158,7 +1177,8 @@
           [ids.sustainedEnabled, ids.sustainedFields],
           [ids.lethalEnabled, ids.lethalFields],
           [ids.devEnabled, ids.devFields],
-          [ids.fnpEnabled, ids.fnpFields]
+          [ids.fnpEnabled, ids.fnpFields],
+          [ids.preDamageEnabled, ids.preDamageFields]
         ].forEach(([toggle, target]) => {
           toggle.addEventListener("change", () => {
             target.classList.toggle("hidden", !toggle.checked);
@@ -1177,6 +1197,7 @@
           ids.woundReroll,
           ids.devCrit,
           ids.fnpTarget,
+          ids.preDamageValue,
           ids.modelCount,
           ids.woundsPerModel
         ].forEach(element => {
@@ -1337,6 +1358,10 @@
         ids.fnpFields.classList.add("hidden");
         ids.fnpTarget.value = "5";
 
+        ids.preDamageEnabled.checked = false;
+        ids.preDamageFields.classList.add("hidden");
+        ids.preDamageValue.value = "";
+
         ids.modelCount.value = "";
         ids.woundsPerModel.value = "";
         updateSectionSummaries();
@@ -1380,6 +1405,10 @@
         ids.fnpEnabled.checked = inputs.fnp.enabled;
         ids.fnpFields.classList.toggle("hidden", !inputs.fnp.enabled);
         ids.fnpTarget.value = String(inputs.fnp.target ?? 5);
+
+        ids.preDamageEnabled.checked = Boolean(inputs.preDamage?.enabled);
+        ids.preDamageFields.classList.toggle("hidden", !inputs.preDamage?.enabled);
+        ids.preDamageValue.value = inputs.preDamage?.enabled ? String(inputs.preDamage.value) : "";
 
         ids.modelCount.value = inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "";
         ids.woundsPerModel.value = inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "";
@@ -1439,6 +1468,10 @@
             enabled: ids.fnpEnabled.checked,
             target: null
           },
+          preDamage: {
+            enabled: ids.preDamageEnabled.checked,
+            value: 0
+          },
           targetProfile: null
         };
 
@@ -1466,6 +1499,11 @@
         if (data.fnp.enabled) {
           data.fnp.target = parseBoundedInt(ids.fnpTarget.value, 2, 6);
           if (data.fnp.target === null) errors.push("Feel No Pain muss zwischen 2+ und 6+ liegen.");
+        }
+
+        if (data.preDamage.enabled) {
+          data.preDamage.value = parsePositiveInt(ids.preDamageValue.value);
+          if (data.preDamage.value === null) errors.push("Vorschädigung muss eine positive Ganzzahl sein.");
         }
 
         const modelCountRaw = cleanNumber(ids.modelCount.value);
@@ -1542,7 +1580,7 @@
         };
 
         const killResults = data.targetProfile
-          ? buildKillResults(attackCountDist, hitBranches, normalHit.damageDist, autoWound.damageDist, data.sustained, data.targetProfile)
+          ? buildKillResults(attackCountDist, hitBranches, normalHit.damageDist, autoWound.damageDist, data.sustained, data.targetProfile, data.preDamage)
           : null;
 
         return {
@@ -1577,10 +1615,11 @@
         return lines;
       }
 
-      function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile) {
+      function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile, preDamage) {
         const { modelCount, woundsPerModel } = targetProfile;
         const stateSize = (modelCount + 1) * woundsPerModel;
         const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
+        const initialState = computePreDamageState(targetProfile, preDamage);
 
         const branchSpecs = [
           { weight: hitBranches.miss, normalHits: 0, autoWounds: 0 },
@@ -1597,7 +1636,7 @@
 
         let totalStateDist = Array(stateSize).fill(0);
         let currentStateDist = Array(stateSize).fill(0);
-        currentStateDist[stateIndex(0, 0, woundsPerModel)] = 1;
+        currentStateDist[stateIndex(initialState.kills, initialState.remainder, woundsPerModel)] = 1;
 
         for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
           const probability = attackCountDist[attacks] || 0;
@@ -1624,6 +1663,16 @@
           killDistribution: trimDistribution(killDistribution),
           expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
         };
+      }
+
+      function computePreDamageState(targetProfile, preDamage) {
+        if (!preDamage?.enabled || !preDamage.value) return { kills: 0, remainder: 0 };
+
+        const maxDamage = targetProfile.modelCount * targetProfile.woundsPerModel;
+        const cappedDamage = Math.min(preDamage.value, maxDamage);
+        const kills = Math.min(targetProfile.modelCount, Math.floor(cappedDamage / targetProfile.woundsPerModel));
+        const remainder = kills >= targetProfile.modelCount ? 0 : cappedDamage - kills * targetProfile.woundsPerModel;
+        return { kills, remainder };
       }
 
       function buildBranchTransitionByRemainder(normalHits, autoWounds, normalDamageDist, autoDamageDist, woundsPerModel) {
@@ -2149,6 +2198,7 @@
         rows.push(compareValueRow("Verwundungswert", entries.map(entry => `${entry.inputs.woundTarget}+`)));
         rows.push(compareValueRow("Save", entries.map(entry => entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`)));
         rows.push(compareValueRow("Schaden", entries.map(entry => labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams))));
+        rows.push(compareValueRow("Vorschädigung", entries.map(entry => entry.inputs.preDamage?.enabled ? `${entry.inputs.preDamage.value}` : "aus")));
         rows.push(compareValueRow("Sonderregeln", entries.map(entry => buildRulesSummary(entry.inputs))));
         rows.push(compareValueRow("Zielprofil", entries.map(entry => entry.inputs.targetProfile ? `${entry.inputs.targetProfile.modelCount} × ${entry.inputs.targetProfile.woundsPerModel} LP` : "aus")));
 
@@ -2221,6 +2271,7 @@
         if (inputs.woundReroll !== "none") rules.push(`RR Wound ${shortReroll(inputs.woundReroll)}`);
         if (inputs.dev.enabled) rules.push("Dev");
         if (inputs.fnp.enabled) rules.push(`FNP ${inputs.fnp.target}+`);
+        if (inputs.preDamage?.enabled) rules.push(`Vorschädigung ${inputs.preDamage.value}`);
         return rules.length ? rules.join(", ") : "aus";
       }
 
@@ -2236,6 +2287,7 @@
           `Save: ${inputs.saveTarget === null ? "Kein Save" : inputs.saveTarget + "+"}`,
           `Schadensmodus: ${labelDamageMode(inputs.damageMode, inputs.damageParams)}`,
           `Feel No Pain: ${inputs.fnp.enabled ? inputs.fnp.target + "+" : "aus"}`,
+          `Vorschädigung: ${inputs.preDamage?.enabled ? `${inputs.preDamage.value} Schaden` : "aus"}`,
           `Sustained Hits: ${inputs.sustained.enabled ? `an, X=${inputs.sustained.value}, kritisch ab ${inputs.sustained.crit}+` : "aus"}`,
           `Lethal Hits: ${inputs.lethal.enabled ? `an, kritisch ab ${inputs.lethal.crit}+` : "aus"}`,
           `Hit Re-Roll: ${labelReroll(inputs.hitReroll)}`,
@@ -2263,6 +2315,7 @@
         if (ids.woundReroll.value !== "none") rules.push(`RR Wound ${shortReroll(ids.woundReroll.value)}`);
         if (ids.devEnabled.checked) rules.push("Dev Wounds");
         if (ids.fnpEnabled.checked) rules.push(`FNP ${cleanSummary(ids.fnpTarget.value, "5")}+`);
+        if (ids.preDamageEnabled.checked) rules.push(`Vorschädigung ${cleanSummary(ids.preDamageValue.value, "1")}`);
         ids.specialRulesSummary.textContent = rules.length ? rules.join(", ") : "aus";
 
         const models = cleanSummary(ids.modelCount.value, "");
@@ -2343,6 +2396,7 @@
           save: entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`,
           schadensmodus: labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams),
           fnp: entry.inputs.fnp.enabled ? `${entry.inputs.fnp.target}+` : "aus",
+          vorschadigung: entry.inputs.preDamage?.enabled ? `${entry.inputs.preDamage.value}` : "aus",
           sustained: entry.inputs.sustained.enabled ? `an; X=${entry.inputs.sustained.value}; crit=${entry.inputs.sustained.crit}+` : "aus",
           lethal: entry.inputs.lethal.enabled ? `an; crit=${entry.inputs.lethal.crit}+` : "aus",
           hit_reroll: labelReroll(entry.inputs.hitReroll),
