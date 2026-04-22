@@ -2491,6 +2491,299 @@
         return parts.join(" | ");
       }
 
+      function calculateAll(data) {
+        const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
+        const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
+        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
+
+        const hitBranches = buildHitBranchProbabilities(data);
+        const woundOutcome = buildWoundOutcomeProbabilities(data);
+        const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
+        const saveSuccessProbability = 1 - saveFailProbability;
+
+        const normalHit = {
+          woundCountDist: [1 - (woundOutcome.normal + woundOutcome.dev), woundOutcome.normal + woundOutcome.dev],
+          unsavedCountDist: [1 - (woundOutcome.normal * saveFailProbability + woundOutcome.dev), woundOutcome.normal * saveFailProbability + woundOutcome.dev],
+          damageDist: buildDamagePerWoundAttemptDistribution(
+            woundOutcome.fail,
+            woundOutcome.normal,
+            woundOutcome.dev,
+            saveSuccessProbability,
+            saveFailProbability,
+            finalDamagePerUnsaved
+          )
+        };
+
+        const autoWound = {
+          woundCountDist: [0, 1],
+          unsavedCountDist: [saveSuccessProbability, saveFailProbability],
+          damageDist: buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved)
+        };
+
+        const perAttack = buildPerAttackDistributions(hitBranches, normalHit, autoWound, data.sustained);
+        const totalHits = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.hits);
+        const totalWounds = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.wounds);
+        const totalUnsaved = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.unsaved);
+        const totalDamage = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.damage);
+
+        const expected = {
+          hits: expectedValue(totalHits),
+          wounds: expectedValue(totalWounds),
+          unsaved: expectedValue(totalUnsaved),
+          damage: expectedValue(totalDamage)
+        };
+
+        const killResults = data.targetProfile
+          ? buildKillResults(attackCountDist, hitBranches, normalHit.damageDist, autoWound.damageDist, data.sustained, data.targetProfile)
+          : null;
+
+        return {
+          expected,
+          trace: buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults),
+          distributions: {
+            unsaved: totalUnsaved,
+            kills: killResults ? killResults.killDistribution : null
+          },
+          killResults
+        };
+      }
+
+      function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile) {
+        const { modelCount, woundsPerModel } = targetProfile;
+        const stateSize = (modelCount + 1) * woundsPerModel;
+        const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
+        const branchSpecs = [
+          { weight: hitBranches.miss, normalHits: 0, autoWounds: 0 },
+          { weight: hitBranches.normal, normalHits: 1, autoWounds: 0 },
+          { weight: hitBranches.sustainedOnly, normalHits: 1 + sustained.value, autoWounds: 0 },
+          { weight: hitBranches.lethalOnly, normalHits: 0, autoWounds: 1 },
+          { weight: hitBranches.both, normalHits: sustained.value, autoWounds: 1 }
+        ].filter(branch => branch.weight > EPSILON);
+
+        const branchTransitions = branchSpecs.map(branch => ({
+          weight: branch.weight,
+          byRemainder: buildBranchTransitionByRemainder(
+            branch.normalHits,
+            branch.autoWounds,
+            normalDamageDist,
+            autoDamageDist,
+            woundsPerModel
+          )
+        }));
+
+        let totalStateDist = Array(stateSize).fill(0);
+        let currentStateDist = Array(stateSize).fill(0);
+        currentStateDist[stateIndex(0, 0, woundsPerModel)] = 1;
+
+        for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
+          const probability = attackCountDist[attacks] || 0;
+          if (probability > EPSILON) {
+            for (let index = 0; index < stateSize; index += 1) {
+              totalStateDist[index] += currentStateDist[index] * probability;
+            }
+          }
+          if (attacks < attackCountDist.length - 1) {
+            currentStateDist = applySingleAttackToStateDist(
+              currentStateDist,
+              branchTransitions,
+              modelCount,
+              woundsPerModel,
+              absorbIndex
+            );
+          }
+        }
+
+        const killDistribution = Array(modelCount + 1).fill(0);
+        let expectedEffectiveDamage = 0;
+
+        for (let kills = 0; kills <= modelCount; kills += 1) {
+          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
+            const probability = totalStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+            if (probability < EPSILON) continue;
+            killDistribution[kills] += probability;
+            expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+          }
+        }
+
+        return {
+          killDistribution: trimDistribution(killDistribution),
+          chances: [],
+          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
+        };
+      }
+
+      function renderHistory() {
+        if (!historyEntries.length) {
+          ids.historyContainer.innerHTML = `
+            <section class="card panel">
+              <div class="note-box">Noch keine Berechnung gespeichert.</div>
+            </section>
+          `;
+          return;
+        }
+
+        ids.historyContainer.innerHTML = historyEntries.map((entry, index) => renderHistoryCard(entry, index)).join("");
+      }
+
+      function renderHistoryCard(entry, index) {
+        const killSection = entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : "";
+        return `
+          <article class="card history-card">
+            <details class="history-details" ${index === 0 ? "open" : ""}>
+              <summary>
+                <div class="history-head">
+                  <div>
+                    <h3>Berechnung #${historyEntries.length - index}</h3>
+                    <div class="muted">${formatDate(entry.createdAt)}</div>
+                  </div>
+                  <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
+                </div>
+              </summary>
+
+              <div class="history-body">
+                <div class="history-actions">
+                  <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
+                  <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
+                  <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
+                </div>
+
+                <details class="section-details">
+                  <summary>
+                    <div class="meta-row">
+                      <span class="pill"><span class="summary-arrow">▶</span>Eingaben</span>
+                    </div>
+                  </summary>
+                  <div class="section-details-body">
+                    <div class="list-stack">
+                      ${renderInputsSummary(entry.inputs)}
+                    </div>
+                  </div>
+                </details>
+
+                <div class="stack">
+                  ${renderOutputSections(entry.outputs, entry.inputs)}
+                  ${killSection}
+                </div>
+              </div>
+            </details>
+          </article>
+        `;
+      }
+
+      function renderOutputSections(outputs, inputs) {
+        const unsavedRows = buildCompactProbabilityRows(outputs.distributions.unsaved, 0, outputs.distributions.unsaved.length - 1);
+        return `
+          <section class="mini-card">
+            <div class="card-title">
+              <h3>Erwartungswerte</h3>
+              <span class="muted">Block A</span>
+            </div>
+            <div class="stats-grid">
+              ${renderStat("Treffer", outputs.expected.hits)}
+              ${renderStat("Verwundungen", outputs.expected.wounds)}
+              ${renderStat("Unsaved Wounds", outputs.expected.unsaved)}
+              ${renderStat("Gesamtschaden", outputs.expected.damage)}
+            </div>
+            <details class="mini-details" style="margin-top:12px;">
+              <summary>
+                <div class="meta-row">
+                  <span class="pill"><span class="summary-arrow">▶</span>Rechenweg anzeigen</span>
+                </div>
+              </summary>
+              <div class="mini-details-body">
+                <div class="list-stack">
+                  ${outputs.trace.map(line => `<div class="list-row"><span>${escapeHtml(line)}</span></div>`).join("")}
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section class="mini-card">
+            <div class="card-title">
+              <h3>Unsaved Wounds</h3>
+            </div>
+            <div class="distribution-hint">X: min (genau X)</div>
+            <div class="min-list">
+              ${unsavedRows}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderKillSection(killResults, inputs) {
+        const rows = buildCompactProbabilityRows(killResults.killDistribution, 0, inputs.targetProfile.modelCount);
+        return `
+          <section class="mini-card">
+            <div class="card-title">
+              <h3>Ziel-Wahrscheinlichkeiten</h3>
+              <span class="muted">${inputs.targetProfile.modelCount} Modelle mit je ${inputs.targetProfile.woundsPerModel} LP</span>
+            </div>
+            <div class="stats-grid">
+              <div class="stat">
+                <small>Erwarteter Kill-Output</small>
+                <strong>${killResults.expectedKillOutput}</strong>
+              </div>
+            </div>
+            <div class="distribution-hint">X: min (genau X)</div>
+            <div class="kill-list" style="margin-top:12px;">
+              ${rows}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderDistributions() {
+        return "";
+      }
+
+      function buildCompactProbabilityRows(distribution, startValue, endValue) {
+        const rows = [];
+        for (let value = startValue; value <= endValue; value += 1) {
+          rows.push(`
+            <div class="list-row">
+              <span class="prob-line">${value}: <strong>${formatPercent(tailProbability(distribution, value))}</strong> <small>(${formatPercent(exactProbability(distribution, value))})</small></span>
+            </div>
+          `);
+        }
+        return rows.join("");
+      }
+
+      function buildCsvRow(entry) {
+        const row = {
+          id: entry.id,
+          zeit: formatDate(entry.createdAt),
+          attackenmodus: labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams),
+          trefferwert: `${entry.inputs.hitTarget}+`,
+          verwundungswert: `${entry.inputs.woundTarget}+`,
+          save: entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`,
+          schadensmodus: labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams),
+          fnp: entry.inputs.fnp.enabled ? `${entry.inputs.fnp.target}+` : "aus",
+          sustained: entry.inputs.sustained.enabled ? `an; X=${entry.inputs.sustained.value}; crit=${entry.inputs.sustained.crit}+` : "aus",
+          lethal: entry.inputs.lethal.enabled ? `an; crit=${entry.inputs.lethal.crit}+` : "aus",
+          hit_reroll: labelReroll(entry.inputs.hitReroll),
+          wound_reroll: labelReroll(entry.inputs.woundReroll),
+          dev: entry.inputs.dev.enabled ? `an; crit=${entry.inputs.dev.crit}+` : "aus",
+          zielprofil: entry.inputs.targetProfile ? `${entry.inputs.targetProfile.modelCount} Modelle / ${entry.inputs.targetProfile.woundsPerModel} LP` : "",
+          erwartete_treffer: formatNumber(entry.outputs.expected.hits),
+          erwartete_verwundungen: formatNumber(entry.outputs.expected.wounds),
+          erwartete_unsaved_wounds: formatNumber(entry.outputs.expected.unsaved),
+          erwarteter_gesamtschaden: formatNumber(entry.outputs.expected.damage),
+          kill_output: entry.outputs.killResults ? entry.outputs.killResults.expectedKillOutput : "",
+          unsaved_verteilung: buildDistributionExport(entry.outputs.distributions.unsaved),
+          kill_verteilung: entry.outputs.killResults ? buildDistributionExport(entry.outputs.killResults.killDistribution) : ""
+        };
+
+        return Object.values(row).map(csvQuote).join(",");
+      }
+
+      function buildDistributionExport(distribution) {
+        const parts = [];
+        for (let value = 0; value < distribution.length; value += 1) {
+          parts.push(`${value}: ${formatPercent(tailProbability(distribution, value))} (${formatPercent(exactProbability(distribution, value))})`);
+        }
+        return parts.join(" | ");
+      }
+
       function formatNumber(value) {
         return Number(value).toLocaleString("de-DE", {
           minimumFractionDigits: 0,
