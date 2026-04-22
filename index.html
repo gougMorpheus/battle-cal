@@ -1070,6 +1070,7 @@
       let uiState = loadUiState();
       const binomialCache = new Map();
 
+      dedupeTargetProfileSection();
       initSelects();
       renderModeFields("attack");
       renderModeFields("damage");
@@ -1196,6 +1197,20 @@
             uiState[detail.id] = detail.open;
             saveUiState();
           });
+        });
+      }
+
+      function dedupeTargetProfileSection() {
+        const duplicateSections = Array.from(document.querySelectorAll('details#targetProfileDetails'));
+        if (duplicateSections.length <= 1) return;
+
+        duplicateSections.slice(1).forEach(detail => {
+          const removableWrapper = detail.closest("section.card") || detail.parentElement;
+          if (removableWrapper) {
+            removableWrapper.remove();
+          } else {
+            detail.remove();
+          }
         });
       }
 
