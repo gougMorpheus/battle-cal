@@ -1647,7 +1647,7 @@
       }
 
       function renderHistoryCard(entry, index) {
-        const title = `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`} #${historyEntries.length - index}`;
+        const title = `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`}, ${labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams)} #${historyEntries.length - index}`;
         return `
           <article class="card history-card">
             <details class="history-details" data-history-id="${entry.id}" ${openHistoryId === entry.id ? "open" : ""}>
