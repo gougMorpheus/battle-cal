@@ -364,6 +364,13 @@
     .standalone-action-group {
       display: grid;
       gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .standalone-action-group button {
+      min-height: 40px;
+      padding: 0 10px;
+      font-size: 0.84rem;
     }
 
     .toast,
