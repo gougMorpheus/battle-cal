@@ -1111,7 +1111,7 @@
 
       let historyEntries = loadHistory();
       let uiState = loadUiState();
-      let openHistoryId = historyEntries[0]?.id || null;
+      let openHistoryId = null;
       let compareSelection = [];
 
       initSelects();
@@ -1383,13 +1383,15 @@
 
         clearErrors();
         const outputs = calculateAll(parsed.data);
-        historyEntries.unshift({
+        const newEntry = {
           id: createId(),
           createdAt: new Date().toISOString(),
           inputs: parsed.data,
           outputs
-        });
+        };
+        historyEntries.unshift(newEntry);
         historyEntries = historyEntries.slice(0, HISTORY_LIMIT);
+        openHistoryId = newEntry.id;
         saveHistory();
         renderHistory();
         showToast("Berechnung gespeichert");
