@@ -2120,8 +2120,7 @@
 
         const rows = [];
         rows.push(compareSectionRow("Identifikation", entries.length));
-        rows.push(compareValueRow("Zeit", entries.map(entry => formatDate(entry.createdAt))));
-        rows.push(compareValueRow("Titel", entries.map((entry, index) => buildHistoryTitle(entry, index))));
+        rows.push(compareValueRow("Eintrag", entries.map((entry, index) => `#${historyEntries.length - historyEntries.findIndex(item => item.id === entry.id)}`)));
 
         rows.push(compareSectionRow("Eingaben", entries.length));
         rows.push(compareValueRow("Attacken", entries.map(entry => labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams))));
@@ -2162,7 +2161,7 @@
             <thead>
               <tr>
                 <th>#</th>
-                ${entries.map((entry, index) => `<th>${escapeHtml(buildHistoryTitle(entry, index))}</th>`).join("")}
+                ${entries.map(entry => `<th>#${historyEntries.length - historyEntries.findIndex(item => item.id === entry.id)}</th>`).join("")}
               </tr>
             </thead>
             <tbody>
