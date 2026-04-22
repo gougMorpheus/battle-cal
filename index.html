@@ -1705,6 +1705,13 @@
         return total;
       }
 
+      function cumulativeProbability(distribution, maximumValue) {
+        let total = 0;
+        const capped = Math.min(maximumValue, distribution.length - 1);
+        for (let value = 0; value <= capped; value += 1) total += distribution[value] || 0;
+        return total;
+      }
+
       function thresholdValueForConfidence(distribution, targetProbability) {
         let tail = 0;
         for (let value = distribution.length - 1; value >= 0; value -= 1) {
@@ -1834,12 +1841,11 @@
       }
 
       function renderOutputSections(outputs, inputs) {
-        const unsavedMinRows = outputs.minUnsavedChances.map(item => `
-          <div class="list-row">
-            <span>Mindestens ${item.value} unsaved wounds</span>
-            <span>${formatPercent(item.probability)}</span>
-          </div>
-        `).join("");
+        const unsavedRows = buildCompactProbabilityRows(
+          outputs.distributions.unsaved,
+          1,
+          outputs.distributions.unsaved.length - 1
+        );
 
         return `
           <section class="mini-card">
@@ -1870,35 +1876,21 @@
           <section class="mini-card">
             <div class="card-title">
               <h3>Unsaved Wounds</h3>
-              <span class="muted">Schwelle und Korridor</span>
-            </div>
-            <div class="threshold-list">
-              <div class="list-row">
-                <span>Mit ${outputs.thresholds.unsaved.thresholdPercent}% Wahrscheinlichkeit kommen mindestens ${outputs.thresholds.unsaved.atLeast} unsaved wounds durch.</span>
-                <span>${formatPercent(outputs.thresholds.unsaved.probability)}</span>
-              </div>
-              <div class="list-row">
-                <span>Mit ${outputs.corridors.unsaved.thresholdPercent}% Wahrscheinlichkeit liegen die unsaved wounds zwischen ${outputs.corridors.unsaved.lower} und ${outputs.corridors.unsaved.upper}.</span>
-                <span>${formatPercent(outputs.corridors.unsaved.probability)}</span>
-              </div>
-            </div>
-            <div class="card-title" style="margin-top:14px;margin-bottom:10px;">
-              <h3>Mindestens-Wahrscheinlichkeiten</h3>
+              <span class="muted">Kompakte Wahrscheinlichkeiten</span>
             </div>
             <div class="min-list">
-              ${unsavedMinRows || `<div class="list-row"><span>Mindestens 1 unsaved wound</span><span>0,0 %</span></div>`}
+              ${unsavedRows || `<div class="list-row"><span>&le;0: 100,0 % | &ge;0: 100,0 %</span></div>`}
             </div>
           </section>
         `;
       }
 
       function renderKillSection(killResults, inputs) {
-        const rows = killResults.chances.map(entry => `
-          <div class="list-row">
-            <span>${entry.kills === inputs.targetProfile.modelCount ? "Gesamte Einheit töten" : `Mindestens ${entry.kills} Modell${entry.kills === 1 ? "" : "e"} töten`}</span>
-            <span>${formatPercent(entry.probability)}</span>
-          </div>
-        `).join("");
+        const rows = buildCompactProbabilityRows(
+          killResults.killDistribution,
+          1,
+          inputs.targetProfile.modelCount
+        );
 
         return `
           <section class="mini-card">
@@ -1910,12 +1902,6 @@
               <div class="stat">
                 <small>Erwarteter Kill-Output</small>
                 <strong>${killResults.expectedKillOutput}</strong>
-              </div>
-            </div>
-            <div class="threshold-list" style="margin-top:12px;">
-              <div class="list-row">
-                <span>Mit ${killResults.corridor.thresholdPercent}% Wahrscheinlichkeit liegen die Kills zwischen ${killResults.corridor.lower} und ${killResults.corridor.upper}.</span>
-                <span>${formatPercent(killResults.corridor.probability)}</span>
               </div>
             </div>
             <div class="kill-list" style="margin-top:12px;">
@@ -2011,6 +1997,18 @@
             <strong>${formatNumber(value)}</strong>
           </div>
         `;
+      }
+
+      function buildCompactProbabilityRows(distribution, startValue, endValue) {
+        const rows = [];
+        for (let value = startValue; value <= endValue; value += 1) {
+          rows.push(`
+            <div class="list-row">
+              <span>&le;${value}: ${formatPercent(cumulativeProbability(distribution, value))} | &ge;${value}: ${formatPercent(tailProbability(distribution, value))}</span>
+            </div>
+          `);
+        }
+        return rows.join("");
       }
 
       function renderErrors(errors) {
