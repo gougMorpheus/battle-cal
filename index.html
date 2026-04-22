@@ -51,6 +51,7 @@
     body {
       overflow-wrap: break-word;
       word-break: break-word;
+      padding-bottom: 88px;
     }
 
     button,
@@ -100,6 +101,20 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
+    }
+
+    .primary-card {
+      border-color: rgba(127, 227, 197, 0.18);
+      background:
+        linear-gradient(180deg, rgba(127, 227, 197, 0.035), rgba(255, 255, 255, 0)),
+        var(--bg-card);
+    }
+
+    .secondary-card {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.012), rgba(255, 255, 255, 0)),
+        var(--bg-soft-2);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
     }
 
     .hero {
@@ -158,7 +173,7 @@
     }
 
     .panel {
-      padding: 18px;
+      padding: 16px;
     }
 
     .card-title,
@@ -179,9 +194,18 @@
       letter-spacing: -0.01em;
     }
 
+    .section-kicker {
+      display: inline-block;
+      margin-bottom: 6px;
+      color: var(--text-dim);
+      font-size: 0.76rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
     .grid {
       display: grid;
-      gap: 14px;
+      gap: 12px;
     }
 
     .grid.two {
@@ -190,12 +214,12 @@
 
     .field {
       display: grid;
-      gap: 7px;
+      gap: 6px;
     }
 
     .field label {
       color: var(--text-soft);
-      font-size: 0.94rem;
+      font-size: 0.88rem;
     }
 
     .field input,
@@ -220,7 +244,7 @@
     .mini-card {
       display: grid;
       gap: 10px;
-      padding: 14px;
+      padding: 12px;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--line);
@@ -473,7 +497,7 @@
     .section-details summary {
       list-style: none;
       cursor: pointer;
-      padding: 14px 16px;
+      padding: 12px 14px;
     }
 
     .mini-details summary::-webkit-details-marker,
@@ -483,7 +507,7 @@
 
     .mini-details-body,
     .section-details-body {
-      padding: 0 16px 16px;
+      padding: 0 14px 14px;
     }
 
     .summary-arrow {
@@ -497,11 +521,77 @@
 
     .history-list {
       display: grid;
-      gap: 14px;
+      gap: 12px;
     }
 
     .history-card {
-      padding: 18px;
+      padding: 16px;
+    }
+
+    .section-summary-text {
+      color: var(--text-dim);
+      font-size: 0.84rem;
+      line-height: 1.35;
+      max-width: 100%;
+    }
+
+    .summary-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .summary-head .pill {
+      flex: 0 0 auto;
+    }
+
+    .summary-head .section-summary-text {
+      text-align: right;
+    }
+
+    .input-actions-card {
+      padding-top: 14px;
+      padding-bottom: 14px;
+    }
+
+    .desktop-actions {
+      display: none;
+    }
+
+    .results-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .results-intro {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .sticky-bar {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 30;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 10px;
+      padding: 10px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(11, 15, 20, 0.92);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+    }
+
+    .sticky-bar button {
+      min-height: 46px;
     }
 
     .history-summary {
@@ -530,6 +620,10 @@
         padding: 20px;
       }
 
+      body {
+        padding-bottom: 32px;
+      }
+
       .grid.two {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -554,6 +648,14 @@
       .list-row span:last-child {
         text-align: right;
         white-space: nowrap;
+      }
+
+      .desktop-actions {
+        display: grid;
+      }
+
+      .sticky-bar {
+        display: none;
       }
     }
 
@@ -589,10 +691,13 @@
 
     <div class="layout">
       <form id="calculatorForm" class="stack" novalidate>
-        <section class="card panel">
+        <section class="card primary-card panel">
           <div class="card-title">
-            <h2>Angriffsprofil</h2>
-            <span class="muted">Waffe gegen genau ein Zielprofil</span>
+            <div>
+              <span class="section-kicker">Kern-Setup</span>
+              <h2>Standard-Eingaben</h2>
+            </div>
+            <span class="muted">Die häufigsten Felder direkt sichtbar</span>
           </div>
 
           <div class="grid">
@@ -663,16 +768,20 @@
           </div>
         </section>
 
-        <section class="card panel">
+        <section class="card secondary-card panel">
           <div class="card-title">
-            <h2>Sonderregeln</h2>
-            <span class="muted">Standardmäßig reduziert</span>
+            <div>
+              <span class="section-kicker">Optional</span>
+              <h2>Sonderregeln</h2>
+            </div>
+            <span class="muted">Nur bei Bedarf</span>
           </div>
 
-          <details class="section-details">
+          <details class="section-details" id="specialRulesDetails">
             <summary>
-              <div class="meta-row">
-                <span class="pill"><span class="summary-arrow">▶</span>Sonderregeln anzeigen</span>
+              <div class="summary-head">
+                <span class="pill"><span class="summary-arrow">▶</span>Sonderregeln</span>
+                <span class="section-summary-text" id="specialRulesSummary">aus</span>
               </div>
             </summary>
             <div class="section-details-body stack">
@@ -752,16 +861,20 @@
           </details>
         </section>
 
-        <section class="card panel">
+        <section class="card secondary-card panel">
           <div class="card-title">
-            <h2>Zielprofil optional</h2>
-            <span class="muted">Standardmäßig eingeklappt</span>
+            <div>
+              <span class="section-kicker">Optional</span>
+              <h2>Zielprofil / Kill-Analyse</h2>
+            </div>
+            <span class="muted">Nur für Modell-Kills</span>
           </div>
 
-          <details class="section-details">
+          <details class="section-details" id="targetProfileDetails">
             <summary>
-              <div class="meta-row">
-                <span class="pill"><span class="summary-arrow">▶</span>Zielprofil anzeigen</span>
+              <div class="summary-head">
+                <span class="pill"><span class="summary-arrow">▶</span>Zielprofil</span>
+                <span class="section-summary-text" id="targetProfileSummary">aus</span>
               </div>
             </summary>
             <div class="section-details-body">
@@ -778,8 +891,16 @@
             </div>
           </details>
 
-          <div class="stack" style="margin-top:14px;">
-            <div class="button-row">
+        <section class="card secondary-card panel input-actions-card">
+          <div class="card-title">
+            <div>
+              <span class="section-kicker">Aktionen</span>
+              <h2>Berechnung</h2>
+            </div>
+            <span class="muted">Verlauf und Werkzeuge</span>
+          </div>
+          <div class="stack">
+            <div class="button-row desktop-actions">
               <button type="submit" class="primary">Berechnen</button>
               <button type="button" id="exampleBtn">Beispielprofil</button>
               <button type="button" id="resetBtn">Reset</button>
@@ -794,11 +915,20 @@
         </section>
       </form>
 
-      <section class="stack">
+      <section class="results-shell">
         <div id="errorContainer" class="hidden"></div>
+        <div class="results-intro">
+          <span class="section-kicker">Ergebnisse</span>
+          <div class="muted">Neueste Berechnung zuerst. Historie bleibt lokal im Browser erhalten.</div>
+        </div>
         <div id="historyContainer" class="history-list"></div>
       </section>
     </div>
+  </div>
+
+  <div class="sticky-bar" aria-label="Schnellaktionen">
+    <button type="submit" form="calculatorForm" class="primary">Berechnen</button>
+    <button type="button" id="stickyResetBtn">Reset</button>
   </div>
 
   <script>
@@ -807,6 +937,7 @@
 
       const EPSILON = 1e-12;
       const HISTORY_KEY = "wh40k-prob-history-v1";
+      const UI_STATE_KEY = "wh40k-prob-ui-state-v1";
       const HISTORY_LIMIT = 50;
       const FACES = [1, 2, 3, 4, 5, 6];
 
@@ -838,6 +969,10 @@
         errorContainer: document.getElementById("errorContainer"),
         historyContainer: document.getElementById("historyContainer"),
         toast: document.getElementById("toast"),
+        specialRulesDetails: document.getElementById("specialRulesDetails"),
+        targetProfileDetails: document.getElementById("targetProfileDetails"),
+        specialRulesSummary: document.getElementById("specialRulesSummary"),
+        targetProfileSummary: document.getElementById("targetProfileSummary"),
         attackMode: document.getElementById("attackMode"),
         damageMode: document.getElementById("damageMode"),
         attackFields: document.getElementById("attackFields"),
@@ -865,10 +1000,12 @@
         woundsPerModel: document.getElementById("woundsPerModel"),
         exampleBtn: document.getElementById("exampleBtn"),
         resetBtn: document.getElementById("resetBtn"),
+        stickyResetBtn: document.getElementById("stickyResetBtn"),
         clearHistoryBtn: document.getElementById("clearHistoryBtn")
       };
 
       let historyEntries = loadHistory();
+      let uiState = loadUiState();
       const binomialCache = new Map();
 
       initSelects();
@@ -876,6 +1013,8 @@
       renderModeFields("damage");
       applyBaseProfile();
       wireUi();
+      restoreAccordionState();
+      updateSectionSummaries();
       renderHistory();
 
       function initSelects() {
@@ -898,7 +1037,9 @@
 
       function wireUi() {
         ids.attackMode.addEventListener("change", () => renderModeFields("attack"));
+        ids.attackMode.addEventListener("change", () => updateSectionSummaries());
         ids.damageMode.addEventListener("change", () => renderModeFields("damage"));
+        ids.damageMode.addEventListener("change", () => updateSectionSummaries());
 
         [
           [ids.fnpEnabled, ids.fnpFields],
@@ -908,8 +1049,28 @@
         ].forEach(([toggle, target]) => {
           toggle.addEventListener("change", () => {
             target.classList.toggle("hidden", !toggle.checked);
+            updateSectionSummaries();
           });
           target.classList.toggle("hidden", !toggle.checked);
+        });
+
+        [
+          ids.hitTarget,
+          ids.woundTarget,
+          ids.saveTarget,
+          ids.thresholdPercent,
+          ids.fnpTarget,
+          ids.sustainedValue,
+          ids.sustainedCrit,
+          ids.lethalCrit,
+          ids.hitReroll,
+          ids.woundReroll,
+          ids.devCrit,
+          ids.modelCount,
+          ids.woundsPerModel
+        ].forEach(element => {
+          element.addEventListener("input", updateSectionSummaries);
+          element.addEventListener("change", updateSectionSummaries);
         });
 
         ids.form.addEventListener("submit", event => {
@@ -923,6 +1084,11 @@
         });
 
         ids.resetBtn.addEventListener("click", () => {
+          applyBaseProfile();
+          clearErrors();
+        });
+
+        ids.stickyResetBtn.addEventListener("click", () => {
           applyBaseProfile();
           clearErrors();
         });
@@ -967,6 +1133,13 @@
             const success = await copyToClipboard(csv);
             showToast(success ? "In Zwischenablage kopiert." : "Kopieren fehlgeschlagen.");
           }
+        });
+
+        [ids.specialRulesDetails, ids.targetProfileDetails].forEach(detail => {
+          detail.addEventListener("toggle", () => {
+            uiState[detail.id] = detail.open;
+            saveUiState();
+          });
         });
       }
 
@@ -1019,6 +1192,7 @@
 
         ids.modelCount.value = "";
         ids.woundsPerModel.value = "";
+        updateSectionSummaries();
       }
 
       function applyExampleProfile() {
@@ -1059,6 +1233,7 @@
 
         ids.modelCount.value = "5";
         ids.woundsPerModel.value = "3";
+        updateSectionSummaries();
       }
 
       function loadInputsIntoForm(inputs) {
@@ -1101,6 +1276,7 @@
 
         ids.modelCount.value = inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "";
         ids.woundsPerModel.value = inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "";
+        updateSectionSummaries();
       }
 
       function calculateAndStore() {
@@ -2029,6 +2205,12 @@
         }
       }
 
+      function saveUiState() {
+        try {
+          localStorage.setItem(UI_STATE_KEY, JSON.stringify(uiState));
+        } catch {}
+      }
+
       function loadHistory() {
         try {
           const raw = localStorage.getItem(HISTORY_KEY);
@@ -2038,6 +2220,51 @@
         } catch {
           return [];
         }
+      }
+
+      function loadUiState() {
+        try {
+          const raw = localStorage.getItem(UI_STATE_KEY);
+          if (!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" ? parsed : {};
+        } catch {
+          return {};
+        }
+      }
+
+      function restoreAccordionState() {
+        ids.specialRulesDetails.open = Boolean(uiState.specialRulesDetails);
+        ids.targetProfileDetails.open = Boolean(uiState.targetProfileDetails);
+      }
+
+      function updateSectionSummaries() {
+        const rules = [];
+
+        if (ids.sustainedEnabled.checked) rules.push(`Sustained ${cleanSummaryValue(ids.sustainedValue.value, "1")}`);
+        if (ids.lethalEnabled.checked) rules.push("Lethal");
+        if (ids.hitReroll.value !== "none") rules.push(`RR Hit ${shortReroll(ids.hitReroll.value)}`);
+        if (ids.woundReroll.value !== "none") rules.push(`RR Wound ${shortReroll(ids.woundReroll.value)}`);
+        if (ids.devEnabled.checked) rules.push("Dev Wounds");
+        if (ids.fnpEnabled.checked) rules.push(`FNP ${cleanSummaryValue(ids.fnpTarget.value, "5")}+`);
+
+        ids.specialRulesSummary.textContent = rules.length ? rules.join(", ") : "aus";
+
+        const models = cleanSummaryValue(ids.modelCount.value, "");
+        const wounds = cleanSummaryValue(ids.woundsPerModel.value, "");
+        ids.targetProfileSummary.textContent =
+          models && wounds ? `${models} Modelle à ${wounds} LP` : "aus";
+      }
+
+      function cleanSummaryValue(value, fallback) {
+        const trimmed = String(value ?? "").trim();
+        return trimmed || fallback;
+      }
+
+      function shortReroll(value) {
+        if (value === "ones") return "1";
+        if (value === "failed") return "fail";
+        return value;
       }
 
       function buildCsvRow(entry) {
