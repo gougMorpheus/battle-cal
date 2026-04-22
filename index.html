@@ -118,13 +118,16 @@
     }
 
     .hero {
-      padding: 22px 20px;
-      margin-bottom: 18px;
+      padding: 14px 4px 6px;
+      margin-bottom: 10px;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
     }
 
     .hero h1 {
-      margin: 0 0 10px;
-      font-size: clamp(1.55rem, 6vw, 2.35rem);
+      margin: 0;
+      font-size: clamp(1.5rem, 6vw, 2rem);
       line-height: 1.08;
       letter-spacing: -0.03em;
     }
@@ -283,6 +286,10 @@
     .button-row {
       display: grid;
       gap: 10px;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .button-row.single {
       grid-template-columns: minmax(0, 1fr);
     }
 
@@ -557,8 +564,35 @@
       padding-bottom: 14px;
     }
 
+    .flat-section {
+      display: grid;
+      gap: 12px;
+    }
+
+    .flat-section > .section-details {
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+    }
+
+    .flat-section > .section-details summary {
+      padding: 0;
+    }
+
+    .flat-section > .section-details .section-details-body {
+      padding: 12px 0 0;
+    }
+
     .desktop-actions {
       display: none;
+    }
+
+    .mobile-only {
+      display: grid;
+    }
+
+    .core-actions {
+      margin-top: 12px;
     }
 
     .results-shell {
@@ -602,13 +636,39 @@
 
     .history-actions {
       margin-top: 12px;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 8px;
     }
 
     .history-actions button {
       width: auto;
       min-width: 0;
-      min-height: 42px;
-      padding: 0 12px;
+      min-height: 34px;
+      padding: 0 10px;
+      font-size: 0.84rem;
+      flex: 1 1 0;
+      white-space: nowrap;
+    }
+
+    .history-details {
+      display: grid;
+      gap: 0;
+    }
+
+    .history-details summary {
+      list-style: none;
+      cursor: pointer;
+    }
+
+    .history-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .history-body {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
     }
 
     .hidden {
@@ -654,6 +714,10 @@
         display: grid;
       }
 
+      .mobile-only {
+        display: none;
+      }
+
       .sticky-bar {
         display: none;
       }
@@ -675,18 +739,8 @@
   <div class="container">
     <div id="toast" class="toast"></div>
 
-    <header class="hero card">
-      <h1>Warhammer 40.000 10th Edition Entscheidungsrechner</h1>
-      <p>
-        Deterministische Einzelprofil-Berechnung für Treffer, Verwundungen, unsaved wounds, Schaden und Kill-Chancen.
-        AP ist bewusst nicht Teil der App. Du gibst direkt den effektiven Save des Ziels ein.
-      </p>
-      <div class="hero-meta">
-        <span class="pill">Dark Mode</span>
-        <span class="pill">Analytische Verteilungen</span>
-        <span class="pill">Mobile First</span>
-        <span class="pill">Einzelne HTML-Datei</span>
-      </div>
+    <header class="hero">
+      <h1>40K Battle Calculator</h1>
     </header>
 
     <div class="layout">
@@ -694,10 +748,9 @@
         <section class="card primary-card panel">
           <div class="card-title">
             <div>
-              <span class="section-kicker">Kern-Setup</span>
-              <h2>Standard-Eingaben</h2>
+              <span class="section-kicker">Eingabe</span>
+              <h2>Eingabe</h2>
             </div>
-            <span class="muted">Die häufigsten Felder direkt sichtbar</span>
           </div>
 
           <div class="grid">
@@ -732,22 +785,6 @@
               </select>
             </div>
 
-            <div class="inline-toggle">
-              <div class="toggle-head">
-                <label class="toggle-label" for="fnpEnabled">
-                  <input id="fnpEnabled" type="checkbox" />
-                  Feel No Pain verwenden
-                </label>
-                <span class="muted">Wirkt auf finalen Schaden, auch gegen Dev Wounds</span>
-              </div>
-              <div id="fnpFields" class="subgrid hidden">
-                <div class="field">
-                  <label for="fnpTarget">Feel No Pain</label>
-                  <select id="fnpTarget"></select>
-                </div>
-              </div>
-            </div>
-
             <div class="field">
               <label for="damageMode">Schadensmodus</label>
               <select id="damageMode">
@@ -766,17 +803,19 @@
               <input id="thresholdPercent" type="number" min="1" max="99" step="1" inputmode="numeric" />
             </div>
           </div>
-        </section>
 
-        <section class="card secondary-card panel">
-          <div class="card-title">
-            <div>
-              <span class="section-kicker">Optional</span>
-              <h2>Sonderregeln</h2>
-            </div>
-            <span class="muted">Nur bei Bedarf</span>
+          <div class="button-row core-actions desktop-actions">
+            <button type="submit" class="primary">Berechnen</button>
+            <button type="button" id="exampleBtn">Beispielprofil</button>
+            <button type="button" id="resetBtn">Reset</button>
           </div>
 
+          <div class="button-row core-actions single mobile-only">
+            <button type="button" id="mobileExampleBtn">Beispielprofil</button>
+          </div>
+        </section>
+
+        <section class="card secondary-card panel flat-section">
           <details class="section-details" id="specialRulesDetails">
             <summary>
               <div class="summary-head">
@@ -857,19 +896,27 @@
                   </div>
                 </div>
               </div>
+
+              <div class="inline-toggle">
+                <div class="toggle-head">
+                  <label class="toggle-label" for="fnpEnabled">
+                    <input id="fnpEnabled" type="checkbox" />
+                    Feel No Pain verwenden
+                  </label>
+                  <span class="muted">Wirkt auf finalen Schaden, auch gegen Dev Wounds</span>
+                </div>
+                <div id="fnpFields" class="subgrid hidden">
+                  <div class="field">
+                    <label for="fnpTarget">Feel No Pain</label>
+                    <select id="fnpTarget"></select>
+                  </div>
+                </div>
+              </div>
             </div>
           </details>
         </section>
 
-        <section class="card secondary-card panel">
-          <div class="card-title">
-            <div>
-              <span class="section-kicker">Optional</span>
-              <h2>Zielprofil / Kill-Analyse</h2>
-            </div>
-            <span class="muted">Nur für Modell-Kills</span>
-          </div>
-
+        <section class="card secondary-card panel flat-section">
           <details class="section-details" id="targetProfileDetails">
             <summary>
               <div class="summary-head">
@@ -897,19 +944,10 @@
               <span class="section-kicker">Aktionen</span>
               <h2>Berechnung</h2>
             </div>
-            <span class="muted">Verlauf und Werkzeuge</span>
           </div>
           <div class="stack">
-            <div class="button-row desktop-actions">
-              <button type="submit" class="primary">Berechnen</button>
-              <button type="button" id="exampleBtn">Beispielprofil</button>
-              <button type="button" id="resetBtn">Reset</button>
-            </div>
-            <div class="button-row">
+            <div class="button-row single">
               <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
-            </div>
-            <div class="note-box">
-              Die Berechnung erfolgt ausschließlich nach Klick auf „Berechnen“. Ergebnisse werden als lokale Historie gespeichert.
             </div>
           </div>
         </section>
@@ -917,10 +955,6 @@
 
       <section class="results-shell">
         <div id="errorContainer" class="hidden"></div>
-        <div class="results-intro">
-          <span class="section-kicker">Ergebnisse</span>
-          <div class="muted">Neueste Berechnung zuerst. Historie bleibt lokal im Browser erhalten.</div>
-        </div>
         <div id="historyContainer" class="history-list"></div>
       </section>
     </div>
@@ -999,6 +1033,7 @@
         modelCount: document.getElementById("modelCount"),
         woundsPerModel: document.getElementById("woundsPerModel"),
         exampleBtn: document.getElementById("exampleBtn"),
+        mobileExampleBtn: document.getElementById("mobileExampleBtn"),
         resetBtn: document.getElementById("resetBtn"),
         stickyResetBtn: document.getElementById("stickyResetBtn"),
         clearHistoryBtn: document.getElementById("clearHistoryBtn")
@@ -1079,6 +1114,11 @@
         });
 
         ids.exampleBtn.addEventListener("click", () => {
+          applyExampleProfile();
+          clearErrors();
+        });
+
+        ids.mobileExampleBtn.addEventListener("click", () => {
           applyExampleProfile();
           clearErrors();
         });
@@ -1968,50 +2008,47 @@
         const latest = index === 0;
         const killSection = entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : "";
         const inputsSummary = renderInputsSummary(entry.inputs);
-        const headerPills = `
-          <div class="pill-row history-summary">
-            ${latest ? `<span class="pill latest">Neueste Berechnung</span>` : ""}
-            <span class="pill highlight">Erwartete unsaved wounds: ${formatNumber(entry.outputs.expected.unsaved)}</span>
-            <span class="pill highlight">Erwarteter Gesamtschaden: ${formatNumber(entry.outputs.expected.damage)}</span>
-            <span class="pill highlight">Unsaved-Mindestschwelle: ${entry.outputs.thresholds.unsaved.atLeast}</span>
-          </div>
-        `;
 
         return `
           <article class="card history-card">
-            <div class="history-head">
-              <div>
-                <h3>Berechnung #${historyEntries.length - index}</h3>
-                <div class="muted">${formatDate(entry.createdAt)}</div>
-              </div>
-            </div>
-
-            ${headerPills}
-
-            <div class="history-actions">
-              <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Eingaben laden</button>
-              <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
-              <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
-            </div>
-
-            <details class="section-details" style="margin-top:14px;">
+            <details class="history-details" ${latest ? "open" : ""}>
               <summary>
-                <div class="meta-row">
-                  <span class="pill"><span class="summary-arrow">▶</span>Eingaben</span>
+                <div class="history-head">
+                  <div>
+                    <h3>Berechnung #${historyEntries.length - index}</h3>
+                    <div class="muted">${formatDate(entry.createdAt)}</div>
+                  </div>
+                  ${latest ? `<span class="pill latest"><span class="summary-arrow">▶</span>Neueste</span>` : `<span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>`}
                 </div>
               </summary>
-              <div class="section-details-body">
-                <div class="list-stack">
-                  ${inputsSummary}
+
+              <div class="history-body">
+                <div class="history-actions">
+                  <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
+                  <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
+                  <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
+                </div>
+
+                <details class="section-details">
+                  <summary>
+                    <div class="meta-row">
+                      <span class="pill"><span class="summary-arrow">▶</span>Eingaben</span>
+                    </div>
+                  </summary>
+                  <div class="section-details-body">
+                    <div class="list-stack">
+                      ${inputsSummary}
+                    </div>
+                  </div>
+                </details>
+
+                <div class="stack">
+                  ${renderOutputSections(entry.outputs, entry.inputs)}
+                  ${killSection}
+                  ${renderDistributions(entry.outputs, entry.inputs)}
                 </div>
               </div>
             </details>
-
-            <div class="stack" style="margin-top:14px;">
-              ${renderOutputSections(entry.outputs, entry.inputs)}
-              ${killSection}
-              ${renderDistributions(entry.outputs, entry.inputs)}
-            </div>
           </article>
         `;
       }
