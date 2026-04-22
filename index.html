@@ -798,10 +798,6 @@
 
             <div id="damageFields" class="grid two"></div>
 
-            <div class="field">
-              <label for="thresholdPercent">Zielwahrscheinlichkeit in %</label>
-              <input id="thresholdPercent" type="number" min="1" max="99" step="1" inputmode="numeric" />
-            </div>
           </div>
 
           <div class="button-row core-actions desktop-actions">
@@ -1093,7 +1089,6 @@
           ids.hitTarget,
           ids.woundTarget,
           ids.saveTarget,
-          ids.thresholdPercent,
           ids.fnpTarget,
           ids.sustainedValue,
           ids.sustainedCrit,
@@ -1212,8 +1207,6 @@
         renderModeFields("damage");
         document.getElementById("damageFixed").value = "2";
 
-        ids.thresholdPercent.value = "65";
-
         ids.sustainedEnabled.checked = false;
         ids.sustainedFields.classList.add("hidden");
         ids.sustainedValue.value = "1";
@@ -1252,8 +1245,6 @@
         ids.damageMode.value = "w3x";
         renderModeFields("damage");
         document.getElementById("damageX").value = "2";
-
-        ids.thresholdPercent.value = "65";
 
         ids.sustainedEnabled.checked = true;
         ids.sustainedFields.classList.remove("hidden");
@@ -1295,8 +1286,6 @@
         renderModeFields("damage");
         if (inputs.damageParams.damageFixed) document.getElementById("damageFixed").value = String(inputs.damageParams.damageFixed);
         if (inputs.damageParams.damageX) document.getElementById("damageX").value = String(inputs.damageParams.damageX);
-
-        ids.thresholdPercent.value = String(inputs.thresholdPercent);
 
         ids.sustainedEnabled.checked = inputs.sustained.enabled;
         ids.sustainedFields.classList.toggle("hidden", !inputs.sustained.enabled);
@@ -1351,7 +1340,6 @@
           hitTarget: parseBoundedInt(ids.hitTarget.value, 1, 6),
           woundTarget: parseBoundedInt(ids.woundTarget.value, 1, 6),
           saveTarget: ids.saveTarget.value === "" ? null : parseBoundedInt(ids.saveTarget.value, 2, 6),
-          thresholdPercent: parseBoundedInt(ids.thresholdPercent.value, 1, 99),
           hitReroll: ids.hitReroll.value,
           woundReroll: ids.woundReroll.value,
           fnp: { enabled: ids.fnpEnabled.checked, target: null },
@@ -1364,7 +1352,6 @@
         if (data.hitTarget === null) errors.push("Trefferwert muss zwischen 1+ und 6+ liegen.");
         if (data.woundTarget === null) errors.push("Verwundungswert muss zwischen 1+ und 6+ liegen.");
         if (data.saveTarget !== null && (data.saveTarget < 2 || data.saveTarget > 6)) errors.push("Save muss leer bleiben oder zwischen 2+ und 6+ liegen.");
-        if (data.thresholdPercent === null) errors.push("Die Zielwahrscheinlichkeit muss zwischen 1 und 99 liegen.");
 
         data.attackParams = collectModeNumbers("attack", data.attackMode, errors);
         data.damageParams = collectModeNumbers("damage", data.damageMode, errors);
@@ -1921,6 +1908,10 @@
         return total;
       }
 
+      function exactProbability(distribution, value) {
+        return distribution[value] || 0;
+      }
+
       function cumulativeProbability(distribution, maximumValue) {
         let total = 0;
         const capped = Math.min(maximumValue, distribution.length - 1);
@@ -2092,7 +2083,7 @@
               <span class="muted">Kompakte Wahrscheinlichkeiten</span>
             </div>
             <div class="min-list">
-              ${unsavedRows || `<div class="list-row"><span>&le;0: 100,0 % | &ge;0: 100,0 %</span></div>`}
+              ${unsavedRows || `<div class="list-row"><span>genau 0: 100,0 %</span></div>`}
             </div>
           </section>
         `;
@@ -2146,7 +2137,6 @@
           `Verwundungswert: ${inputs.woundTarget}+`,
           `Save: ${inputs.saveTarget === null ? "Kein Save" : inputs.saveTarget + "+"}`,
           `Schadensmodus: ${labelDamageMode(inputs.damageMode, inputs.damageParams)}`,
-          `Zielwahrscheinlichkeit: ${inputs.thresholdPercent}%`,
           `Feel No Pain: ${inputs.fnp.enabled ? inputs.fnp.target + "+" : "aus"}`,
           `Sustained Hits: ${inputs.sustained.enabled ? `an, X=${inputs.sustained.value}, kritisch ab ${inputs.sustained.crit}+` : "aus"}`,
           `Lethal Hits: ${inputs.lethal.enabled ? `an, kritisch ab ${inputs.lethal.crit}+` : "aus"}`,
@@ -2214,10 +2204,15 @@
 
       function buildCompactProbabilityRows(distribution, startValue, endValue) {
         const rows = [];
+        rows.push(`
+          <div class="list-row">
+            <span>genau 0: ${formatPercent(exactProbability(distribution, 0))}</span>
+          </div>
+        `);
         for (let value = startValue; value <= endValue; value += 1) {
           rows.push(`
             <div class="list-row">
-              <span>&le;${value}: ${formatPercent(cumulativeProbability(distribution, value))} | &ge;${value}: ${formatPercent(tailProbability(distribution, value))}</span>
+              <span>min ${value}: ${formatPercent(tailProbability(distribution, value))} / genau ${value}: ${formatPercent(exactProbability(distribution, value))}</span>
             </div>
           `);
         }
@@ -2313,7 +2308,6 @@
           verwundungswert: `${entry.inputs.woundTarget}+`,
           save: entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`,
           schadensmodus: labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams),
-          zielwahrscheinlichkeit: entry.inputs.thresholdPercent,
           fnp: entry.inputs.fnp.enabled ? `${entry.inputs.fnp.target}+` : "aus",
           sustained: entry.inputs.sustained.enabled ? `an; X=${entry.inputs.sustained.value}; crit=${entry.inputs.sustained.crit}+` : "aus",
           lethal: entry.inputs.lethal.enabled ? `an; crit=${entry.inputs.lethal.crit}+` : "aus",
@@ -2326,14 +2320,8 @@
           erwartete_unsaved_wounds: formatNumber(entry.outputs.expected.unsaved),
           erwarteter_gesamtschaden: formatNumber(entry.outputs.expected.damage),
           kill_output: entry.outputs.killResults ? entry.outputs.killResults.expectedKillOutput : "",
-          unsaved_mindestschwelle: entry.outputs.thresholds.unsaved.atLeast,
-          unsaved_mindestschwelle_wahrscheinlichkeit: formatPercent(entry.outputs.thresholds.unsaved.probability),
-          unsaved_korridor: `${entry.outputs.corridors.unsaved.lower}-${entry.outputs.corridors.unsaved.upper}`,
-          unsaved_korridor_wahrscheinlichkeit: formatPercent(entry.outputs.corridors.unsaved.probability),
-          kill_korridor: entry.outputs.killResults ? `${entry.outputs.killResults.corridor.lower}-${entry.outputs.killResults.corridor.upper}` : "",
-          kill_korridor_wahrscheinlichkeit: entry.outputs.killResults ? formatPercent(entry.outputs.killResults.corridor.probability) : "",
-          kill_chancen: entry.outputs.killResults ? entry.outputs.killResults.chances.map(item => `>=${item.kills}: ${formatPercent(item.probability)}`).join(" | ") : "",
-          unsaved_min_liste: entry.outputs.minUnsavedChances.map(item => `>=${item.value}: ${formatPercent(item.probability)}`).join(" | ")
+          unsaved_verteilung: buildDistributionExport(entry.outputs.distributions.unsaved),
+          kill_verteilung: entry.outputs.killResults ? buildDistributionExport(entry.outputs.killResults.killDistribution) : ""
         };
 
         const values = Object.values(row).map(csvQuote);
@@ -2423,6 +2411,14 @@
       function csvQuote(value) {
         const stringValue = String(value ?? "");
         return `"${stringValue.replaceAll('"', '""')}"`;
+      }
+
+      function buildDistributionExport(distribution) {
+        const parts = [`genau 0: ${formatPercent(exactProbability(distribution, 0))}`];
+        for (let value = 1; value < distribution.length; value += 1) {
+          parts.push(`min ${value}: ${formatPercent(tailProbability(distribution, value))} / genau ${value}: ${formatPercent(exactProbability(distribution, value))}`);
+        }
+        return parts.join(" | ");
       }
 
       function formatNumber(value) {
