@@ -1131,9 +1131,13 @@
           ids.modelCount,
           ids.woundsPerModel
         ].forEach(element => {
+          if (!element) return;
           element.addEventListener("input", updateSectionSummaries);
           element.addEventListener("change", updateSectionSummaries);
         });
+
+        attachDuplicateFieldListeners("modelCount");
+        attachDuplicateFieldListeners("woundsPerModel");
 
         ids.form.addEventListener("submit", event => {
           event.preventDefault();
@@ -1214,6 +1218,35 @@
         });
       }
 
+      function attachDuplicateFieldListeners(id) {
+        document.querySelectorAll(`[id="${id}"]`).forEach(element => {
+          element.addEventListener("input", updateSectionSummaries);
+          element.addEventListener("change", updateSectionSummaries);
+        });
+      }
+
+      function readDuplicateFieldValue(id) {
+        const elements = Array.from(document.querySelectorAll(`[id="${id}"]`));
+        const visibleFilled = elements.find(element => isElementVisible(element) && String(element.value ?? "").trim() !== "");
+        if (visibleFilled) return String(visibleFilled.value ?? "").trim();
+
+        const anyFilled = elements.find(element => String(element.value ?? "").trim() !== "");
+        if (anyFilled) return String(anyFilled.value ?? "").trim();
+
+        const visible = elements.find(isElementVisible);
+        return String((visible || elements[0])?.value ?? "").trim();
+      }
+
+      function setDuplicateFieldValue(id, value) {
+        document.querySelectorAll(`[id="${id}"]`).forEach(element => {
+          element.value = value;
+        });
+      }
+
+      function isElementVisible(element) {
+        return Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
+      }
+
       function renderModeFields(kind) {
         const mode = kind === "attack" ? ids.attackMode.value : ids.damageMode.value;
         const target = kind === "attack" ? ids.attackFields : ids.damageFields;
@@ -1259,8 +1292,8 @@
         ids.devFields.classList.add("hidden");
         ids.devCrit.value = "6";
 
-        ids.modelCount.value = "";
-        ids.woundsPerModel.value = "";
+        setDuplicateFieldValue("modelCount", "");
+        setDuplicateFieldValue("woundsPerModel", "");
         updateSectionSummaries();
       }
 
@@ -1298,8 +1331,8 @@
         ids.devFields.classList.remove("hidden");
         ids.devCrit.value = "6";
 
-        ids.modelCount.value = "5";
-        ids.woundsPerModel.value = "3";
+        setDuplicateFieldValue("modelCount", "5");
+        setDuplicateFieldValue("woundsPerModel", "3");
         updateSectionSummaries();
       }
 
@@ -1339,8 +1372,8 @@
         ids.devFields.classList.toggle("hidden", !inputs.dev.enabled);
         ids.devCrit.value = String(inputs.dev.crit);
 
-        ids.modelCount.value = inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "";
-        ids.woundsPerModel.value = inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "";
+        setDuplicateFieldValue("modelCount", inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "");
+        setDuplicateFieldValue("woundsPerModel", inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "");
         updateSectionSummaries();
       }
 
@@ -1414,8 +1447,8 @@
           if (data.dev.crit === null) errors.push("Kritische Verwundung für Devastating Wounds muss zwischen 1 und 6 liegen.");
         }
 
-        const modelCountRaw = cleanNumber(ids.modelCount.value);
-        const woundsPerModelRaw = cleanNumber(ids.woundsPerModel.value);
+        const modelCountRaw = cleanNumber(readDuplicateFieldValue("modelCount"));
+        const woundsPerModelRaw = cleanNumber(readDuplicateFieldValue("woundsPerModel"));
         if ((modelCountRaw && !woundsPerModelRaw) || (!modelCountRaw && woundsPerModelRaw)) {
           errors.push("Für das Zielprofil bitte beide Felder füllen oder beide leer lassen.");
         } else if (modelCountRaw && woundsPerModelRaw) {
@@ -2319,8 +2352,8 @@
 
         ids.specialRulesSummary.textContent = rules.length ? rules.join(", ") : "aus";
 
-        const models = cleanSummaryValue(ids.modelCount.value, "");
-        const wounds = cleanSummaryValue(ids.woundsPerModel.value, "");
+        const models = cleanSummaryValue(readDuplicateFieldValue("modelCount"), "");
+        const wounds = cleanSummaryValue(readDuplicateFieldValue("woundsPerModel"), "");
         ids.targetProfileSummary.textContent =
           models && wounds ? `${models} Modelle à ${wounds} LP` : "aus";
       }
