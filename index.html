@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Warhammer 40k 10th Entscheidungsrechner</title>
+  <title>40K Battle Calculator</title>
   <style>
     :root {
       color-scheme: dark;
@@ -16,22 +16,16 @@
       --text: #edf3ff;
       --text-soft: #a7b5ca;
       --text-dim: #7f8da5;
-      --accent: #7fe3c5;
       --accent-strong: #54cfaa;
-      --danger: #ff7d7d;
-      --warn: #ffb86f;
       --shadow: 0 18px 46px rgba(0, 0, 0, 0.35);
       --radius: 20px;
-      --radius-sm: 14px;
       --font-ui: "Segoe UI", "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
       --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
     }
 
     *,
     *::before,
-    *::after {
-      box-sizing: border-box;
-    }
+    *::after { box-sizing: border-box; }
 
     html,
     body {
@@ -70,17 +64,16 @@
       padding: 16px;
     }
 
-    .layout,
-    .stack,
-    .grid,
-    .subgrid,
-    .history-list,
-    .stats-grid,
-    .distribution-grid,
-    .button-row,
-    .list-stack {
-      min-width: 0;
-      max-width: 100%;
+    .hero {
+      padding: 14px 4px 6px;
+      margin-bottom: 10px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 6vw, 2rem);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
     }
 
     .layout {
@@ -91,6 +84,7 @@
     .stack {
       display: grid;
       gap: 16px;
+      min-width: 0;
     }
 
     .card {
@@ -115,64 +109,6 @@
         linear-gradient(180deg, rgba(255, 255, 255, 0.012), rgba(255, 255, 255, 0)),
         var(--bg-soft-2);
       box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
-    }
-
-    .hero {
-      padding: 14px 4px 6px;
-      margin-bottom: 10px;
-      background: transparent;
-      border: 0;
-      box-shadow: none;
-    }
-
-    .hero h1 {
-      margin: 0;
-      font-size: clamp(1.5rem, 6vw, 2rem);
-      line-height: 1.08;
-      letter-spacing: -0.03em;
-    }
-
-    .hero p,
-    .muted,
-    .footer-note {
-      color: var(--text-soft);
-      line-height: 1.5;
-    }
-
-    .hero-meta,
-    .pill-row,
-    .history-actions,
-    .distribution-meta,
-    .badge-row,
-    .meta-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: var(--bg-soft);
-      border: 1px solid var(--line);
-      color: var(--text-soft);
-      font-size: 0.92rem;
-      white-space: normal;
-    }
-
-    .pill.highlight {
-      color: #effff9;
-      border-color: rgba(127, 227, 197, 0.22);
-      background: rgba(127, 227, 197, 0.12);
-    }
-
-    .pill.latest {
-      color: #fff7e8;
-      border-color: rgba(255, 184, 111, 0.24);
-      background: rgba(255, 184, 111, 0.14);
     }
 
     .panel {
@@ -206,9 +142,16 @@
       text-transform: uppercase;
     }
 
+    .muted {
+      color: var(--text-soft);
+      font-size: 0.93rem;
+      line-height: 1.45;
+    }
+
     .grid {
       display: grid;
       gap: 12px;
+      min-width: 0;
     }
 
     .grid.two {
@@ -241,6 +184,46 @@
     .field select:focus {
       border-color: var(--accent-strong);
       background: #1d2939;
+    }
+
+    .button-row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .core-actions {
+      margin-top: 12px;
+    }
+
+    .desktop-actions {
+      display: none;
+    }
+
+    button {
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      border-color: var(--line-strong);
+    }
+
+    button.primary {
+      background: linear-gradient(180deg, rgba(127, 227, 197, 0.24), rgba(127, 227, 197, 0.12));
+      border-color: rgba(127, 227, 197, 0.28);
+      color: #effff9;
+      font-weight: 700;
+    }
+
+    button.ghost {
+      background: transparent;
+    }
+
+    button.warn {
+      border-color: rgba(255, 125, 125, 0.25);
+      color: #ffd7d7;
+      background: rgba(255, 125, 125, 0.08);
     }
 
     .inline-toggle,
@@ -283,60 +266,107 @@
       gap: 12px;
     }
 
-    .button-row {
+    .section-details,
+    .mini-details {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.02);
+      overflow: hidden;
+    }
+
+    .flat-section {
       display: grid;
-      gap: 10px;
-      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
     }
 
-    .button-row.single {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    button {
-      cursor: pointer;
-      transition: border-color 120ms ease, background 120ms ease;
-    }
-
-    button:hover {
-      border-color: var(--line-strong);
-    }
-
-    button.primary {
-      background: linear-gradient(180deg, rgba(127, 227, 197, 0.24), rgba(127, 227, 197, 0.12));
-      border-color: rgba(127, 227, 197, 0.28);
-      color: #effff9;
-      font-weight: 700;
-    }
-
-    button.ghost {
+    .flat-section > .section-details {
+      border: 0;
       background: transparent;
+      border-radius: 0;
     }
 
-    button.warn {
-      border-color: rgba(255, 125, 125, 0.25);
-      color: #ffd7d7;
-      background: rgba(255, 125, 125, 0.08);
+    .section-details summary,
+    .mini-details summary,
+    .history-details summary {
+      list-style: none;
+      cursor: pointer;
     }
 
-    .error-box,
+    .section-details summary::-webkit-details-marker,
+    .mini-details summary::-webkit-details-marker,
+    .history-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .flat-section > .section-details summary {
+      padding: 0;
+    }
+
+    .section-details summary,
+    .mini-details summary {
+      padding: 12px 14px;
+    }
+
+    .flat-section > .section-details .section-details-body {
+      padding: 12px 0 0;
+    }
+
+    .section-details-body,
+    .mini-details-body {
+      padding: 0 14px 14px;
+    }
+
+    .summary-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .section-summary-text {
+      color: var(--text-dim);
+      font-size: 0.84rem;
+      line-height: 1.35;
+      text-align: right;
+    }
+
+    .summary-arrow {
+      display: inline-block;
+      transition: transform 120ms ease;
+    }
+
+    details[open] .summary-arrow {
+      transform: rotate(90deg);
+    }
+
+    .pill,
+    .meta-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      color: var(--text-soft);
+      font-size: 0.92rem;
+    }
+
+    .standalone-action {
+      margin-top: 10px;
+    }
+
+    .toast,
     .note-box,
-    .toast {
+    .error-box {
       padding: 14px 16px;
       border-radius: 16px;
       line-height: 1.45;
-    }
-
-    .error-box {
-      background: rgba(255, 125, 125, 0.1);
-      border: 1px solid rgba(255, 125, 125, 0.24);
-      color: #ffd7d7;
-    }
-
-    .note-box {
-      background: rgba(127, 227, 197, 0.08);
-      border: 1px solid rgba(127, 227, 197, 0.16);
-      color: var(--text-soft);
     }
 
     .toast {
@@ -351,6 +381,59 @@
 
     .toast.show {
       display: block;
+    }
+
+    .error-box {
+      background: rgba(255, 125, 125, 0.1);
+      border: 1px solid rgba(255, 125, 125, 0.24);
+      color: #ffd7d7;
+    }
+
+    .note-box {
+      background: rgba(127, 227, 197, 0.08);
+      border: 1px solid rgba(127, 227, 197, 0.16);
+      color: var(--text-soft);
+    }
+
+    .results-shell,
+    .history-list,
+    .list-stack,
+    .min-list,
+    .kill-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .history-card {
+      padding: 16px;
+    }
+
+    .history-details {
+      display: grid;
+      gap: 0;
+    }
+
+    .history-body {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .history-actions {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .history-actions button {
+      width: auto;
+      min-width: 0;
+      min-height: 34px;
+      padding: 0 10px;
+      font-size: 0.84rem;
+      flex: 1 1 0;
+      white-space: nowrap;
     }
 
     .stats-grid {
@@ -378,12 +461,10 @@
       letter-spacing: -0.03em;
     }
 
-    .list-stack,
-    .threshold-list,
-    .kill-list,
-    .min-list {
-      display: grid;
-      gap: 10px;
+    .distribution-hint {
+      margin-bottom: 10px;
+      color: var(--text-dim);
+      font-size: 0.84rem;
     }
 
     .list-row {
@@ -396,219 +477,25 @@
       border: 1px solid var(--line);
     }
 
-    .list-row span:last-child {
-      color: var(--text-soft);
-      text-align: left;
-      white-space: normal;
-    }
-
-    .distribution-grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .distribution-card {
-      padding: 16px;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--line);
-      overflow: hidden;
-    }
-
-    .distribution-card h3 {
-      margin: 0;
-    }
-
-    .distribution-scroll {
-      display: grid;
-      gap: 8px;
-      max-height: 320px;
-      overflow-y: auto;
-      overflow-x: hidden;
-      padding-right: 2px;
-    }
-
-    .dist-row {
-      display: grid;
-      grid-template-columns: minmax(2.25rem, auto) minmax(0, 1fr) minmax(4.5rem, auto);
-      align-items: center;
-      gap: 8px;
-      font-size: 0.92rem;
-    }
-
-    .dist-row.is-threshold {
-      padding: 8px 10px;
-      border-radius: 14px;
-      background: rgba(127, 227, 197, 0.08);
-      border: 1px solid rgba(127, 227, 197, 0.18);
-    }
-
-    .dist-row.is-expected {
-      color: #ffffff;
-    }
-
-    .dist-label {
-      color: var(--text-soft);
-      font-family: var(--font-mono);
-      text-align: right;
-    }
-
-    .dist-bar {
-      position: relative;
-      min-height: 16px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      overflow: hidden;
-    }
-
-    .dist-fill {
-      position: absolute;
-      inset: 0 auto 0 0;
-      border-radius: inherit;
-      background: linear-gradient(90deg, rgba(127, 227, 197, 0.82), rgba(111, 164, 255, 0.74));
-    }
-
-    .dist-prob {
-      text-align: right;
-      color: var(--text-soft);
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-
-    .badge {
+    .prob-line {
       display: inline-flex;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      color: var(--text-soft);
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.04);
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
     }
 
-    .badge.threshold {
-      color: #ebfff8;
-      border-color: rgba(127, 227, 197, 0.25);
-      background: rgba(127, 227, 197, 0.12);
+    .prob-line strong {
+      font-weight: 700;
+      color: var(--text);
     }
 
-    .mini-details,
-    .section-details {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.02);
-      overflow: hidden;
-    }
-
-    .mini-details summary,
-    .section-details summary {
-      list-style: none;
-      cursor: pointer;
-      padding: 12px 14px;
-    }
-
-    .mini-details summary::-webkit-details-marker,
-    .section-details summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .mini-details-body,
-    .section-details-body {
-      padding: 0 14px 14px;
-    }
-
-    .summary-arrow {
-      display: inline-block;
-      transition: transform 120ms ease;
-    }
-
-    details[open] .summary-arrow {
-      transform: rotate(90deg);
-    }
-
-    .history-list {
-      display: grid;
-      gap: 12px;
-    }
-
-    .history-card {
-      padding: 16px;
-    }
-
-    .section-summary-text {
+    .prob-line small {
+      font-size: 0.82rem;
       color: var(--text-dim);
-      font-size: 0.84rem;
-      line-height: 1.35;
-      max-width: 100%;
     }
 
-    .summary-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      width: 100%;
-      min-width: 0;
-    }
-
-    .summary-head .pill {
-      flex: 0 0 auto;
-    }
-
-    .summary-head .section-summary-text {
-      text-align: right;
-    }
-
-    .input-actions-card {
-      padding-top: 14px;
-      padding-bottom: 14px;
-    }
-
-    .standalone-action {
-      margin-top: 10px;
-    }
-
-    .flat-section {
-      display: grid;
-      gap: 12px;
-    }
-
-    .flat-section > .section-details {
-      border: 0;
-      background: transparent;
-      border-radius: 0;
-    }
-
-    .flat-section > .section-details summary {
-      padding: 0;
-    }
-
-    .flat-section > .section-details .section-details-body {
-      padding: 12px 0 0;
-    }
-
-    .desktop-actions {
-      display: none;
-    }
-
-    .mobile-only {
-      display: grid;
-    }
-
-    .core-actions {
-      margin-top: 12px;
-    }
-
-    .results-shell {
-      display: grid;
-      gap: 12px;
-    }
-
-    .results-intro {
-      padding: 14px 16px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.018);
+    .hidden {
+      display: none !important;
     }
 
     .sticky-bar {
@@ -632,122 +519,13 @@
       min-height: 46px;
     }
 
-    .history-summary {
-      display: grid;
-      gap: 8px;
-      margin: 10px 0 14px;
-    }
-
-    .history-actions {
-      margin-top: 12px;
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 8px;
-    }
-
-    .history-actions button {
-      width: auto;
-      min-width: 0;
-      min-height: 34px;
-      padding: 0 10px;
-      font-size: 0.84rem;
-      flex: 1 1 0;
-      white-space: nowrap;
-    }
-
-    .history-details {
-      display: grid;
-      gap: 0;
-    }
-
-    .history-details summary {
-      list-style: none;
-      cursor: pointer;
-    }
-
-    .history-details summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .history-body {
-      display: grid;
-      gap: 14px;
-      margin-top: 14px;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .distribution-hint {
-      margin-bottom: 10px;
-      color: var(--text-dim);
-      font-size: 0.84rem;
-    }
-
-    .prob-line {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .prob-line strong {
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .prob-line small {
-      font-size: 0.82rem;
-      color: var(--text-dim);
-    }
-
     @media (min-width: 760px) {
-      .container {
-        padding: 20px;
-      }
-
-      body {
-        padding-bottom: 32px;
-      }
-
-      .grid.two {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .button-row {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .distribution-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .list-row {
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-      }
-
-      .list-row span:last-child {
-        text-align: right;
-        white-space: nowrap;
-      }
-
-      .desktop-actions {
-        display: grid;
-      }
-
-      .mobile-only {
-        display: none;
-      }
-
-      .sticky-bar {
-        display: none;
-      }
+      body { padding-bottom: 32px; }
+      .container { padding: 20px; }
+      .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .desktop-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sticky-bar { display: none; }
     }
 
     @media (min-width: 980px) {
@@ -755,10 +533,7 @@
         grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
         align-items: start;
       }
-
-      .stats-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-      }
+      .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -824,7 +599,6 @@
             </div>
 
             <div id="damageFields" class="grid two"></div>
-
           </div>
 
           <div class="button-row core-actions desktop-actions">
@@ -955,28 +729,6 @@
           </details>
         </section>
 
-        <section class="card secondary-card panel flat-section">
-          <details class="section-details" id="targetProfileDetails">
-            <summary>
-              <div class="summary-head">
-                <span class="pill"><span class="summary-arrow">▶</span>Zielprofil</span>
-                <span class="section-summary-text" id="targetProfileSummary">aus</span>
-              </div>
-            </summary>
-            <div class="section-details-body">
-              <div class="grid two">
-                <div class="field">
-                  <label for="modelCount">Anzahl Modelle</label>
-                  <input id="modelCount" type="number" min="1" step="1" inputmode="numeric" placeholder="z. B. 5" />
-                </div>
-                <div class="field">
-                  <label for="woundsPerModel">Lebenspunkte pro Modell</label>
-                  <input id="woundsPerModel" type="number" min="1" step="1" inputmode="numeric" placeholder="z. B. 3" />
-                </div>
-              </div>
-            </div>
-          </details>
-
         <div class="standalone-action">
           <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
         </div>
@@ -1002,7 +754,9 @@
       const HISTORY_KEY = "wh40k-prob-history-v1";
       const UI_STATE_KEY = "wh40k-prob-ui-state-v1";
       const HISTORY_LIMIT = 50;
-      const FACES = [1, 2, 3, 4, 5, 6];
+      const facesHitWound = [1, 2, 3, 4, 5, 6];
+      const facesSaveFnp = [2, 3, 4, 5, 6];
+      const binomialCache = new Map();
 
       const templates = {
         attack: {
@@ -1029,24 +783,20 @@
 
       const ids = {
         form: document.getElementById("calculatorForm"),
+        toast: document.getElementById("toast"),
         errorContainer: document.getElementById("errorContainer"),
         historyContainer: document.getElementById("historyContainer"),
-        toast: document.getElementById("toast"),
+        attackMode: document.getElementById("attackMode"),
+        attackFields: document.getElementById("attackFields"),
+        hitTarget: document.getElementById("hitTarget"),
+        woundTarget: document.getElementById("woundTarget"),
+        saveTarget: document.getElementById("saveTarget"),
+        damageMode: document.getElementById("damageMode"),
+        damageFields: document.getElementById("damageFields"),
         specialRulesDetails: document.getElementById("specialRulesDetails"),
         targetProfileDetails: document.getElementById("targetProfileDetails"),
         specialRulesSummary: document.getElementById("specialRulesSummary"),
         targetProfileSummary: document.getElementById("targetProfileSummary"),
-        attackMode: document.getElementById("attackMode"),
-        damageMode: document.getElementById("damageMode"),
-        attackFields: document.getElementById("attackFields"),
-        damageFields: document.getElementById("damageFields"),
-        hitTarget: document.getElementById("hitTarget"),
-        woundTarget: document.getElementById("woundTarget"),
-        saveTarget: document.getElementById("saveTarget"),
-        fnpEnabled: document.getElementById("fnpEnabled"),
-        fnpFields: document.getElementById("fnpFields"),
-        fnpTarget: document.getElementById("fnpTarget"),
-        thresholdPercent: document.getElementById("thresholdPercent"),
         sustainedEnabled: document.getElementById("sustainedEnabled"),
         sustainedFields: document.getElementById("sustainedFields"),
         sustainedValue: document.getElementById("sustainedValue"),
@@ -1059,6 +809,9 @@
         devEnabled: document.getElementById("devEnabled"),
         devFields: document.getElementById("devFields"),
         devCrit: document.getElementById("devCrit"),
+        fnpEnabled: document.getElementById("fnpEnabled"),
+        fnpFields: document.getElementById("fnpFields"),
+        fnpTarget: document.getElementById("fnpTarget"),
         modelCount: document.getElementById("modelCount"),
         woundsPerModel: document.getElementById("woundsPerModel"),
         resetBtn: document.getElementById("resetBtn"),
@@ -1068,9 +821,7 @@
 
       let historyEntries = loadHistory();
       let uiState = loadUiState();
-      const binomialCache = new Map();
 
-      dedupeTargetProfileSection();
       initSelects();
       renderModeFields("attack");
       renderModeFields("damage");
@@ -1081,8 +832,8 @@
       renderHistory();
 
       function initSelects() {
-        [ids.hitTarget, ids.woundTarget, ids.fnpTarget].forEach(select => {
-          FACES.forEach(value => {
+        [ids.hitTarget, ids.woundTarget].forEach(select => {
+          facesHitWound.forEach(value => {
             const option = document.createElement("option");
             option.value = String(value);
             option.textContent = value + "+";
@@ -1090,54 +841,56 @@
           });
         });
 
-        FACES.slice(1).forEach(value => {
-          const option = document.createElement("option");
-          option.value = String(value);
-          option.textContent = value + "+";
-          ids.saveTarget.appendChild(option);
+        [ids.saveTarget, ids.fnpTarget].forEach(select => {
+          facesSaveFnp.forEach(value => {
+            const option = document.createElement("option");
+            option.value = String(value);
+            option.textContent = value + "+";
+            select.appendChild(option);
+          });
         });
       }
 
       function wireUi() {
-        ids.attackMode.addEventListener("change", () => renderModeFields("attack"));
-        ids.attackMode.addEventListener("change", () => updateSectionSummaries());
-        ids.damageMode.addEventListener("change", () => renderModeFields("damage"));
-        ids.damageMode.addEventListener("change", () => updateSectionSummaries());
+        ids.attackMode.addEventListener("change", () => {
+          renderModeFields("attack");
+          updateSectionSummaries();
+        });
+
+        ids.damageMode.addEventListener("change", () => {
+          renderModeFields("damage");
+          updateSectionSummaries();
+        });
 
         [
-          [ids.fnpEnabled, ids.fnpFields],
           [ids.sustainedEnabled, ids.sustainedFields],
           [ids.lethalEnabled, ids.lethalFields],
-          [ids.devEnabled, ids.devFields]
+          [ids.devEnabled, ids.devFields],
+          [ids.fnpEnabled, ids.fnpFields]
         ].forEach(([toggle, target]) => {
           toggle.addEventListener("change", () => {
             target.classList.toggle("hidden", !toggle.checked);
             updateSectionSummaries();
           });
-          target.classList.toggle("hidden", !toggle.checked);
         });
 
         [
           ids.hitTarget,
           ids.woundTarget,
           ids.saveTarget,
-          ids.fnpTarget,
           ids.sustainedValue,
           ids.sustainedCrit,
           ids.lethalCrit,
           ids.hitReroll,
           ids.woundReroll,
           ids.devCrit,
+          ids.fnpTarget,
           ids.modelCount,
           ids.woundsPerModel
         ].forEach(element => {
-          if (!element) return;
           element.addEventListener("input", updateSectionSummaries);
           element.addEventListener("change", updateSectionSummaries);
         });
-
-        attachDuplicateFieldListeners("modelCount");
-        attachDuplicateFieldListeners("woundsPerModel");
 
         ids.form.addEventListener("submit", event => {
           event.preventDefault();
@@ -1170,18 +923,10 @@
           const button = event.target.closest("button[data-action]");
           if (!button) return;
 
-          const id = button.getAttribute("data-id");
           const action = button.getAttribute("data-action");
+          const id = button.getAttribute("data-id");
           const entry = historyEntries.find(item => item.id === id);
           if (!entry) return;
-
-          if (action === "delete") {
-            historyEntries = historyEntries.filter(item => item.id !== id);
-            saveHistory();
-            renderHistory();
-            showToast("Eintrag gelöscht.");
-            return;
-          }
 
           if (action === "load") {
             loadInputsIntoForm(entry.inputs);
@@ -1190,9 +935,16 @@
           }
 
           if (action === "export") {
-            const csv = buildCsvRow(entry);
-            const success = await copyToClipboard(csv);
+            const success = await copyToClipboard(buildCsvRow(entry));
             showToast(success ? "In Zwischenablage kopiert." : "Kopieren fehlgeschlagen.");
+            return;
+          }
+
+          if (action === "delete") {
+            historyEntries = historyEntries.filter(item => item.id !== id);
+            saveHistory();
+            renderHistory();
+            showToast("Eintrag gelöscht.");
           }
         });
 
@@ -1204,54 +956,11 @@
         });
       }
 
-      function dedupeTargetProfileSection() {
-        const duplicateSections = Array.from(document.querySelectorAll('details#targetProfileDetails'));
-        if (duplicateSections.length <= 1) return;
-
-        duplicateSections.slice(1).forEach(detail => {
-          const removableWrapper = detail.closest("section.card") || detail.parentElement;
-          if (removableWrapper) {
-            removableWrapper.remove();
-          } else {
-            detail.remove();
-          }
-        });
-      }
-
-      function attachDuplicateFieldListeners(id) {
-        document.querySelectorAll(`[id="${id}"]`).forEach(element => {
-          element.addEventListener("input", updateSectionSummaries);
-          element.addEventListener("change", updateSectionSummaries);
-        });
-      }
-
-      function readDuplicateFieldValue(id) {
-        const elements = Array.from(document.querySelectorAll(`[id="${id}"]`));
-        const visibleFilled = elements.find(element => isElementVisible(element) && String(element.value ?? "").trim() !== "");
-        if (visibleFilled) return String(visibleFilled.value ?? "").trim();
-
-        const anyFilled = elements.find(element => String(element.value ?? "").trim() !== "");
-        if (anyFilled) return String(anyFilled.value ?? "").trim();
-
-        const visible = elements.find(isElementVisible);
-        return String((visible || elements[0])?.value ?? "").trim();
-      }
-
-      function setDuplicateFieldValue(id, value) {
-        document.querySelectorAll(`[id="${id}"]`).forEach(element => {
-          element.value = value;
-        });
-      }
-
-      function isElementVisible(element) {
-        return Boolean(element && (element.offsetWidth || element.offsetHeight || element.getClientRects().length));
-      }
-
       function renderModeFields(kind) {
         const mode = kind === "attack" ? ids.attackMode.value : ids.damageMode.value;
         const target = kind === "attack" ? ids.attackFields : ids.damageFields;
-        const config = templates[kind][mode];
-        target.innerHTML = config.map(field => `
+        const fields = templates[kind][mode];
+        target.innerHTML = fields.map(field => `
           <div class="field">
             <label for="${field.id}">${field.label}</label>
             <input id="${field.id}" type="number" min="${field.min}" step="1" inputmode="numeric" placeholder="${field.placeholder}" />
@@ -1267,10 +976,6 @@
         ids.hitTarget.value = "3";
         ids.woundTarget.value = "4";
         ids.saveTarget.value = "4";
-
-        ids.fnpEnabled.checked = false;
-        ids.fnpFields.classList.add("hidden");
-        ids.fnpTarget.value = "5";
 
         ids.damageMode.value = "fix";
         renderModeFields("damage");
@@ -1292,69 +997,33 @@
         ids.devFields.classList.add("hidden");
         ids.devCrit.value = "6";
 
-        setDuplicateFieldValue("modelCount", "");
-        setDuplicateFieldValue("woundsPerModel", "");
-        updateSectionSummaries();
-      }
-
-      function applyExampleProfile() {
-        ids.attackMode.value = "xw6y";
-        renderModeFields("attack");
-        document.getElementById("attackX").value = "2";
-        document.getElementById("attackY").value = "1";
-
-        ids.hitTarget.value = "3";
-        ids.woundTarget.value = "4";
-        ids.saveTarget.value = "4";
-
-        ids.fnpEnabled.checked = true;
-        ids.fnpFields.classList.remove("hidden");
+        ids.fnpEnabled.checked = false;
+        ids.fnpFields.classList.add("hidden");
         ids.fnpTarget.value = "5";
 
-        ids.damageMode.value = "w3x";
-        renderModeFields("damage");
-        document.getElementById("damageX").value = "2";
-
-        ids.sustainedEnabled.checked = true;
-        ids.sustainedFields.classList.remove("hidden");
-        ids.sustainedValue.value = "1";
-        ids.sustainedCrit.value = "6";
-
-        ids.lethalEnabled.checked = true;
-        ids.lethalFields.classList.remove("hidden");
-        ids.lethalCrit.value = "6";
-
-        ids.hitReroll.value = "failed";
-        ids.woundReroll.value = "ones";
-
-        ids.devEnabled.checked = true;
-        ids.devFields.classList.remove("hidden");
-        ids.devCrit.value = "6";
-
-        setDuplicateFieldValue("modelCount", "5");
-        setDuplicateFieldValue("woundsPerModel", "3");
+        ids.modelCount.value = "";
+        ids.woundsPerModel.value = "";
         updateSectionSummaries();
       }
 
       function loadInputsIntoForm(inputs) {
         ids.attackMode.value = inputs.attackMode;
         renderModeFields("attack");
-        if (inputs.attackParams.attackFixed) document.getElementById("attackFixed").value = String(inputs.attackParams.attackFixed);
-        if (inputs.attackParams.attackX) document.getElementById("attackX").value = String(inputs.attackParams.attackX);
-        if (inputs.attackParams.attackY) document.getElementById("attackY").value = String(inputs.attackParams.attackY);
+        Object.entries(inputs.attackParams).forEach(([id, value]) => {
+          const field = document.getElementById(id);
+          if (field) field.value = String(value);
+        });
 
         ids.hitTarget.value = String(inputs.hitTarget);
         ids.woundTarget.value = String(inputs.woundTarget);
         ids.saveTarget.value = inputs.saveTarget === null ? "" : String(inputs.saveTarget);
 
-        ids.fnpEnabled.checked = inputs.fnp.enabled;
-        ids.fnpFields.classList.toggle("hidden", !inputs.fnp.enabled);
-        ids.fnpTarget.value = String(inputs.fnp.target ?? 5);
-
         ids.damageMode.value = inputs.damageMode;
         renderModeFields("damage");
-        if (inputs.damageParams.damageFixed) document.getElementById("damageFixed").value = String(inputs.damageParams.damageFixed);
-        if (inputs.damageParams.damageX) document.getElementById("damageX").value = String(inputs.damageParams.damageX);
+        Object.entries(inputs.damageParams).forEach(([id, value]) => {
+          const field = document.getElementById(id);
+          if (field) field.value = String(value);
+        });
 
         ids.sustainedEnabled.checked = inputs.sustained.enabled;
         ids.sustainedFields.classList.toggle("hidden", !inputs.sustained.enabled);
@@ -1372,8 +1041,12 @@
         ids.devFields.classList.toggle("hidden", !inputs.dev.enabled);
         ids.devCrit.value = String(inputs.dev.crit);
 
-        setDuplicateFieldValue("modelCount", inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "");
-        setDuplicateFieldValue("woundsPerModel", inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "");
+        ids.fnpEnabled.checked = inputs.fnp.enabled;
+        ids.fnpFields.classList.toggle("hidden", !inputs.fnp.enabled);
+        ids.fnpTarget.value = String(inputs.fnp.target ?? 5);
+
+        ids.modelCount.value = inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "";
+        ids.woundsPerModel.value = inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "";
         updateSectionSummaries();
       }
 
@@ -1386,49 +1059,53 @@
 
         clearErrors();
         const outputs = calculateAll(parsed.data);
-        const entry = {
-          id: cryptoSafeId(),
+        historyEntries.unshift({
+          id: createId(),
           createdAt: new Date().toISOString(),
           inputs: parsed.data,
           outputs
-        };
-
-        historyEntries.unshift(entry);
+        });
         historyEntries = historyEntries.slice(0, HISTORY_LIMIT);
         saveHistory();
         renderHistory();
-        showToast("Berechnung gespeichert.");
+        showToast("Berechnung gespeichert");
       }
 
       function parseAndValidateInputs() {
         const errors = [];
-
         const data = {
           attackMode: ids.attackMode.value,
-          damageMode: ids.damageMode.value,
+          attackParams: collectModeNumbers("attack", ids.attackMode.value, errors),
           hitTarget: parseBoundedInt(ids.hitTarget.value, 1, 6),
           woundTarget: parseBoundedInt(ids.woundTarget.value, 1, 6),
           saveTarget: ids.saveTarget.value === "" ? null : parseBoundedInt(ids.saveTarget.value, 2, 6),
+          damageMode: ids.damageMode.value,
+          damageParams: collectModeNumbers("damage", ids.damageMode.value, errors),
           hitReroll: ids.hitReroll.value,
           woundReroll: ids.woundReroll.value,
-          fnp: { enabled: ids.fnpEnabled.checked, target: null },
-          sustained: { enabled: ids.sustainedEnabled.checked, value: 1, crit: 6 },
-          lethal: { enabled: ids.lethalEnabled.checked, crit: 6 },
-          dev: { enabled: ids.devEnabled.checked, crit: 6 },
+          sustained: {
+            enabled: ids.sustainedEnabled.checked,
+            value: 1,
+            crit: 6
+          },
+          lethal: {
+            enabled: ids.lethalEnabled.checked,
+            crit: 6
+          },
+          dev: {
+            enabled: ids.devEnabled.checked,
+            crit: 6
+          },
+          fnp: {
+            enabled: ids.fnpEnabled.checked,
+            target: null
+          },
           targetProfile: null
         };
 
         if (data.hitTarget === null) errors.push("Trefferwert muss zwischen 1+ und 6+ liegen.");
         if (data.woundTarget === null) errors.push("Verwundungswert muss zwischen 1+ und 6+ liegen.");
         if (data.saveTarget !== null && (data.saveTarget < 2 || data.saveTarget > 6)) errors.push("Save muss leer bleiben oder zwischen 2+ und 6+ liegen.");
-
-        data.attackParams = collectModeNumbers("attack", data.attackMode, errors);
-        data.damageParams = collectModeNumbers("damage", data.damageMode, errors);
-
-        if (data.fnp.enabled) {
-          data.fnp.target = parseBoundedInt(ids.fnpTarget.value, 2, 6);
-          if (data.fnp.target === null) errors.push("Feel No Pain muss zwischen 2+ und 6+ liegen.");
-        }
 
         if (data.sustained.enabled) {
           data.sustained.value = parsePositiveInt(ids.sustainedValue.value);
@@ -1447,8 +1124,13 @@
           if (data.dev.crit === null) errors.push("Kritische Verwundung für Devastating Wounds muss zwischen 1 und 6 liegen.");
         }
 
-        const modelCountRaw = cleanNumber(readDuplicateFieldValue("modelCount"));
-        const woundsPerModelRaw = cleanNumber(readDuplicateFieldValue("woundsPerModel"));
+        if (data.fnp.enabled) {
+          data.fnp.target = parseBoundedInt(ids.fnpTarget.value, 2, 6);
+          if (data.fnp.target === null) errors.push("Feel No Pain muss zwischen 2+ und 6+ liegen.");
+        }
+
+        const modelCountRaw = cleanNumber(ids.modelCount.value);
+        const woundsPerModelRaw = cleanNumber(ids.woundsPerModel.value);
         if ((modelCountRaw && !woundsPerModelRaw) || (!modelCountRaw && woundsPerModelRaw)) {
           errors.push("Für das Zielprofil bitte beide Felder füllen oder beide leer lassen.");
         } else if (modelCountRaw && woundsPerModelRaw) {
@@ -1513,9 +1195,6 @@
         const totalUnsaved = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.unsaved);
         const totalDamage = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.damage);
 
-        const unsavedThreshold = buildThresholdSummary(totalUnsaved, data.thresholdPercent);
-        const unsavedCorridor = buildCentralCorridor(totalUnsaved, data.thresholdPercent);
-
         const expected = {
           hits: expectedValue(totalHits),
           wounds: expectedValue(totalWounds),
@@ -1523,27 +1202,17 @@
           damage: expectedValue(totalDamage)
         };
 
-        const minUnsavedChances = buildAtLeastList(totalUnsaved);
-
         const killResults = data.targetProfile
-          ? buildKillResults(attackCountDist, hitBranches, normalHit.damageDist, autoWound.damageDist, data.sustained, data.targetProfile, data.thresholdPercent)
+          ? buildKillResults(attackCountDist, hitBranches, normalHit.damageDist, autoWound.damageDist, data.sustained, data.targetProfile)
           : null;
-
-        const trace = buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults);
 
         return {
           expected,
-          trace,
-          thresholds: { unsaved: unsavedThreshold },
-          corridors: {
-            unsaved: unsavedCorridor,
-            kills: killResults ? killResults.corridor : null
-          },
+          trace: buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults),
           distributions: {
             unsaved: totalUnsaved,
             kills: killResults ? killResults.killDistribution : null
           },
-          minUnsavedChances,
           killResults
         };
       }
@@ -1551,55 +1220,29 @@
       function buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults) {
         const avgAttacks = expectedValue(attackCountDist);
         const avgHitsPerAttack = hitBranches.normal + hitBranches.sustainedOnly * (1 + data.sustained.value) + hitBranches.lethalOnly + hitBranches.both * (1 + data.sustained.value);
-        const avgWoundsPerAttack =
-          hitBranches.normal * (woundOutcome.normal + woundOutcome.dev) +
-          hitBranches.sustainedOnly * (1 + data.sustained.value) * (woundOutcome.normal + woundOutcome.dev) +
-          hitBranches.lethalOnly * 1 +
-          hitBranches.both * (1 + data.sustained.value + data.sustained.value * (woundOutcome.normal + woundOutcome.dev));
         const avgDamagePerUnsaved = expectedValue(finalDamagePerUnsaved);
         const unsavedChanceFromNormal = woundOutcome.normal * saveFailProbability + woundOutcome.dev;
 
         const lines = [
           `Erwartete Attacken: ${formatNumber(avgAttacks)}`,
           `Erwartete Treffer pro Attacke: ${formatNumber(avgHitsPerAttack)}`,
-          `Erwartete Treffer gesamt: ${formatNumber(avgAttacks)} × ${formatNumber(avgHitsPerAttack)} ≈ ${formatNumber(expected.hits)}`,
-          `Erwartete Verwundungen gesamt: analytisch aus Hit-/Wound-/Lethal-/Sustained-Verteilung ≈ ${formatNumber(expected.wounds)}`,
-          `Unsaved-Chance pro normal aufgelöster Treffer: ${formatPercent(unsavedChanceFromNormal)}`,
-          `Erwartete unsaved wounds gesamt: analytisch aus kompletter Verteilung ≈ ${formatNumber(expected.unsaved)}`,
+          `Erwartete Treffer gesamt: ≈ ${formatNumber(expected.hits)}`,
+          `Erwartete Verwundungen gesamt: ≈ ${formatNumber(expected.wounds)}`,
+          `Unsaved-Chance pro normal aufgelöster Wunde: ${formatPercent(unsavedChanceFromNormal)}`,
+          `Erwartete unsaved wounds gesamt: ≈ ${formatNumber(expected.unsaved)}`,
           `Erwarteter Schaden pro unsaved wound nach FNP: ${formatNumber(avgDamagePerUnsaved)}`,
-          `Erwarteter Gesamtschaden: analytisch aus kompletter Schadensverteilung ≈ ${formatNumber(expected.damage)}`
+          `Erwarteter Gesamtschaden: ≈ ${formatNumber(expected.damage)}`
         ];
 
-        if (killResults) {
-          lines.push(`Erwarteter Kill-Output: ${killResults.expectedKillOutput}`);
-        }
-
+        if (killResults) lines.push(`Erwarteter Kill-Output: ${killResults.expectedKillOutput}`);
         return lines;
       }
 
-      function buildAtLeastList(distribution) {
-        const items = [];
-        for (let value = 1; value < distribution.length; value += 1) {
-          const probability = tailProbability(distribution, value);
-          if (probability < EPSILON) continue;
-          items.push({ value, probability });
-        }
-        return items;
-      }
-
-      function buildCentralCorridor(distribution, thresholdPercent) {
-        const target = thresholdPercent / 100;
-        const tail = (1 - target) / 2;
-        const lower = quantile(distribution, tail);
-        const upper = quantile(distribution, 1 - tail);
-        const actual = intervalProbability(distribution, lower, upper);
-        return { thresholdPercent, lower, upper, probability: actual };
-      }
-
-      function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile, thresholdPercent) {
+      function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile) {
         const { modelCount, woundsPerModel } = targetProfile;
         const stateSize = (modelCount + 1) * woundsPerModel;
         const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
+
         const branchSpecs = [
           { weight: hitBranches.miss, normalHits: 0, autoWounds: 0 },
           { weight: hitBranches.normal, normalHits: 1, autoWounds: 0 },
@@ -1610,13 +1253,7 @@
 
         const branchTransitions = branchSpecs.map(branch => ({
           weight: branch.weight,
-          byRemainder: buildBranchTransitionByRemainder(
-            branch.normalHits,
-            branch.autoWounds,
-            normalDamageDist,
-            autoDamageDist,
-            woundsPerModel
-          )
+          byRemainder: buildBranchTransitionByRemainder(branch.normalHits, branch.autoWounds, normalDamageDist, autoDamageDist, woundsPerModel)
         }));
 
         let totalStateDist = Array(stateSize).fill(0);
@@ -1626,9 +1263,7 @@
         for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
           const probability = attackCountDist[attacks] || 0;
           if (probability > EPSILON) {
-            for (let i = 0; i < stateSize; i += 1) {
-              totalStateDist[i] += currentStateDist[i] * probability;
-            }
+            for (let i = 0; i < stateSize; i += 1) totalStateDist[i] += currentStateDist[i] * probability;
           }
           if (attacks < attackCountDist.length - 1) {
             currentStateDist = applySingleAttackToStateDist(currentStateDist, branchTransitions, modelCount, woundsPerModel, absorbIndex);
@@ -1637,7 +1272,6 @@
 
         const killDistribution = Array(modelCount + 1).fill(0);
         let expectedEffectiveDamage = 0;
-
         for (let kills = 0; kills <= modelCount; kills += 1) {
           for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
             const probability = totalStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
@@ -1647,15 +1281,8 @@
           }
         }
 
-        const chances = [];
-        for (let kills = 1; kills <= modelCount; kills += 1) {
-          chances.push({ kills, probability: tailProbability(killDistribution, kills) });
-        }
-
         return {
           killDistribution: trimDistribution(killDistribution),
-          chances,
-          corridor: buildCentralCorridor(killDistribution, thresholdPercent),
           expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
         };
       }
@@ -1666,12 +1293,8 @@
           let states = new Map();
           states.set(relativeStateKey(0, remainder), 1);
 
-          for (let i = 0; i < normalHits; i += 1) {
-            states = applyDamageAttemptRelative(states, normalDamageDist, woundsPerModel);
-          }
-          for (let i = 0; i < autoWounds; i += 1) {
-            states = applyDamageAttemptRelative(states, autoDamageDist, woundsPerModel);
-          }
+          for (let i = 0; i < normalHits; i += 1) states = applyDamageAttemptRelative(states, normalDamageDist, woundsPerModel);
+          for (let i = 0; i < autoWounds; i += 1) states = applyDamageAttemptRelative(states, autoDamageDist, woundsPerModel);
 
           output[remainder] = Array.from(states.entries()).map(([key, probability]) => {
             const [deltaKills, endRemainder] = key.split("|").map(Number);
@@ -1713,9 +1336,9 @@
           const [deltaKills, remainder] = key.split("|").map(Number);
           damageDist.forEach((damageProbability, damage) => {
             if (damageProbability < EPSILON) return;
+
             let newDeltaKills = deltaKills;
             let newRemainder = remainder;
-
             if (damage > 0) {
               const remaining = woundsPerModel - remainder;
               const applied = Math.min(damage, remaining);
@@ -1727,7 +1350,6 @@
                 newRemainder = filled;
               }
             }
-
             const newKey = relativeStateKey(newDeltaKills, newRemainder);
             next.set(newKey, (next.get(newKey) || 0) + stateProbability * damageProbability);
           });
@@ -1761,11 +1383,10 @@
         let fail = 0;
         for (let roll = 1; roll <= 6; roll += 1) {
           const probability = finalRollDist[roll] || 0;
-          const isDev = data.dev.enabled && roll >= data.dev.crit;
+          const critical = data.dev.enabled && roll >= data.dev.crit;
           const success = isWoundSuccess(roll, data);
-
           if (!success) fail += probability;
-          else if (isDev) dev += probability;
+          else if (critical) dev += probability;
           else normal += probability;
         }
         return { fail, normal, dev };
@@ -1785,18 +1406,9 @@
           if (branch.weight < EPSILON) continue;
 
           const branchHits = deltaDistribution(branch.hits);
-          const branchWounds = convolveScalar(
-            repeatDistribution(normalHit.woundCountDist, branch.normalHits),
-            repeatDistribution(autoWound.woundCountDist, branch.autoWounds)
-          );
-          const branchUnsaved = convolveScalar(
-            repeatDistribution(normalHit.unsavedCountDist, branch.normalHits),
-            repeatDistribution(autoWound.unsavedCountDist, branch.autoWounds)
-          );
-          const branchDamage = convolveScalar(
-            repeatDistribution(normalHit.damageDist, branch.normalHits),
-            repeatDistribution(autoWound.damageDist, branch.autoWounds)
-          );
+          const branchWounds = convolveScalar(repeatDistribution(normalHit.woundCountDist, branch.normalHits), repeatDistribution(autoWound.woundCountDist, branch.autoWounds));
+          const branchUnsaved = convolveScalar(repeatDistribution(normalHit.unsavedCountDist, branch.normalHits), repeatDistribution(autoWound.unsavedCountDist, branch.autoWounds));
+          const branchDamage = convolveScalar(repeatDistribution(normalHit.damageDist, branch.normalHits), repeatDistribution(autoWound.damageDist, branch.autoWounds));
 
           perAttack.hits = addWeightedDistribution(perAttack.hits, branchHits, branch.weight);
           perAttack.wounds = addWeightedDistribution(perAttack.wounds, branchWounds, branch.weight);
@@ -1874,15 +1486,6 @@
           if (attacks < attackCountDist.length - 1) current = convolveScalar(current, perAttackDist);
         }
         return trimDistribution(total);
-      }
-
-      function buildThresholdSummary(distribution, thresholdPercent) {
-        const atLeast = thresholdValueForConfidence(distribution, thresholdPercent / 100);
-        return {
-          thresholdPercent,
-          atLeast,
-          probability: tailProbability(distribution, atLeast)
-        };
       }
 
       function buildFinalRollDistribution(rerollMode, successFn) {
@@ -1981,47 +1584,6 @@
         return distribution[value] || 0;
       }
 
-      function cumulativeProbability(distribution, maximumValue) {
-        let total = 0;
-        const capped = Math.min(maximumValue, distribution.length - 1);
-        for (let value = 0; value <= capped; value += 1) total += distribution[value] || 0;
-        return total;
-      }
-
-      function thresholdValueForConfidence(distribution, targetProbability) {
-        let tail = 0;
-        for (let value = distribution.length - 1; value >= 0; value -= 1) {
-          tail += distribution[value] || 0;
-          if (tail + EPSILON >= targetProbability) return value;
-        }
-        return 0;
-      }
-
-      function quantile(distribution, q) {
-        let cdf = 0;
-        for (let value = 0; value < distribution.length; value += 1) {
-          cdf += distribution[value] || 0;
-          if (cdf + EPSILON >= q) return value;
-        }
-        return distribution.length - 1;
-      }
-
-      function intervalProbability(distribution, lower, upper) {
-        let total = 0;
-        for (let value = lower; value <= upper; value += 1) total += distribution[value] || 0;
-        return total;
-      }
-
-      function binomialDistribution(n, keepProbability) {
-        const key = `${n}|${keepProbability.toFixed(8)}`;
-        if (binomialCache.has(key)) return binomialCache.get(key).slice();
-        let distribution = [1];
-        const bernoulli = [1 - keepProbability, keepProbability];
-        for (let i = 0; i < n; i += 1) distribution = convolveScalar(distribution, bernoulli);
-        binomialCache.set(key, distribution.slice());
-        return distribution;
-      }
-
       function stateIndex(kills, remainder, woundsPerModel) {
         return kills * woundsPerModel + remainder;
       }
@@ -2041,581 +1603,6 @@
         if (!historyEntries.length) {
           ids.historyContainer.innerHTML = `
             <section class="card panel">
-              <div class="card-title">
-                <h2>Ergebnis-Historie</h2>
-                <span class="muted">Neueste Berechnungen zuerst</span>
-              </div>
-              <div class="note-box">Noch keine Berechnung gespeichert.</div>
-            </section>
-          `;
-          return;
-        }
-
-        ids.historyContainer.innerHTML = `
-          <section class="card panel">
-            <div class="card-title">
-              <h2>Ergebnis-Historie</h2>
-              <span class="muted">${historyEntries.length} gespeicherte Berechnung${historyEntries.length === 1 ? "" : "en"}</span>
-            </div>
-            <div class="history-list">
-              ${historyEntries.map((entry, index) => renderHistoryCard(entry, index)).join("")}
-            </div>
-          </section>
-        `;
-      }
-
-      function renderHistoryCard(entry, index) {
-        const latest = index === 0;
-        const killSection = entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : "";
-        const inputsSummary = renderInputsSummary(entry.inputs);
-
-        return `
-          <article class="card history-card">
-            <details class="history-details" ${latest ? "open" : ""}>
-              <summary>
-                <div class="history-head">
-                  <div>
-                    <h3>Berechnung #${historyEntries.length - index}</h3>
-                    <div class="muted">${formatDate(entry.createdAt)}</div>
-                  </div>
-                  <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
-                </div>
-              </summary>
-
-              <div class="history-body">
-                <div class="history-actions">
-                  <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
-                  <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
-                  <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
-                </div>
-
-                <details class="section-details">
-                  <summary>
-                    <div class="meta-row">
-                      <span class="pill"><span class="summary-arrow">▶</span>Eingaben</span>
-                    </div>
-                  </summary>
-                  <div class="section-details-body">
-                    <div class="list-stack">
-                      ${inputsSummary}
-                    </div>
-                  </div>
-                </details>
-
-                <div class="stack">
-                  ${renderOutputSections(entry.outputs, entry.inputs)}
-                  ${killSection}
-                  ${renderDistributions(entry.outputs, entry.inputs)}
-                </div>
-              </div>
-            </details>
-          </article>
-        `;
-      }
-
-      function renderOutputSections(outputs, inputs) {
-        const unsavedRows = buildCompactProbabilityRows(
-          outputs.distributions.unsaved,
-          1,
-          outputs.distributions.unsaved.length - 1
-        );
-
-        return `
-          <section class="mini-card">
-            <div class="card-title">
-              <h3>Erwartungswerte</h3>
-              <span class="muted">Block A</span>
-            </div>
-            <div class="stats-grid">
-              ${renderStat("Treffer", outputs.expected.hits)}
-              ${renderStat("Verwundungen", outputs.expected.wounds)}
-              ${renderStat("Unsaved Wounds", outputs.expected.unsaved)}
-              ${renderStat("Gesamtschaden", outputs.expected.damage)}
-            </div>
-            <details class="mini-details" style="margin-top:12px;">
-              <summary>
-                <div class="meta-row">
-                  <span class="pill"><span class="summary-arrow">▶</span>Rechenweg anzeigen</span>
-                </div>
-              </summary>
-              <div class="mini-details-body">
-                <div class="list-stack">
-                  ${outputs.trace.map(line => `<div class="list-row"><span>${escapeHtml(line)}</span></div>`).join("")}
-                </div>
-              </div>
-            </details>
-          </section>
-
-          <section class="mini-card">
-            <div class="card-title">
-              <h3>Unsaved Wounds</h3>
-            </div>
-            <div class="distribution-hint">X: min (genau X)</div>
-            <div class="min-list">
-              ${unsavedRows || `<div class="list-row"><span>genau 0: 100,0 %</span></div>`}
-            </div>
-          </section>
-        `;
-      }
-
-      function renderKillSection(killResults, inputs) {
-        const rows = buildCompactProbabilityRows(
-          killResults.killDistribution,
-          1,
-          inputs.targetProfile.modelCount
-        );
-
-        return `
-          <section class="mini-card">
-            <div class="card-title">
-              <h3>Ziel-Wahrscheinlichkeiten</h3>
-              <span class="muted">${inputs.targetProfile.modelCount} Modelle mit je ${inputs.targetProfile.woundsPerModel} LP</span>
-            </div>
-            <div class="stats-grid">
-              <div class="stat">
-                <small>Erwarteter Kill-Output</small>
-                <strong>${killResults.expectedKillOutput}</strong>
-              </div>
-            </div>
-            <div class="distribution-hint">X: min (genau X)</div>
-            <div class="kill-list" style="margin-top:12px;">
-              ${rows}
-            </div>
-          </section>
-        `;
-      }
-
-      function renderDistributions(outputs, inputs) {
-        return `
-          <section class="mini-card">
-            <div class="card-title">
-              <h3>Verteilungen</h3>
-              <span class="muted">Unsaved Wounds und Kills</span>
-            </div>
-            <div class="distribution-grid">
-              ${renderDistribution("Unsaved Wounds", outputs.distributions.unsaved, outputs.expected.unsaved, outputs.thresholds.unsaved.atLeast, inputs.thresholdPercent)}
-              ${outputs.distributions.kills ? renderDistribution("Kills", outputs.distributions.kills, expectedValue(outputs.distributions.kills), outputs.corridors.kills ? outputs.corridors.kills.lower : 0, inputs.thresholdPercent) : ""}
-            </div>
-          </section>
-        `;
-      }
-
-      function renderInputsSummary(inputs) {
-        const items = [
-          `Attackenmodus: ${labelAttackMode(inputs.attackMode, inputs.attackParams)}`,
-          `Trefferwert: ${inputs.hitTarget}+`,
-          `Verwundungswert: ${inputs.woundTarget}+`,
-          `Save: ${inputs.saveTarget === null ? "Kein Save" : inputs.saveTarget + "+"}`,
-          `Schadensmodus: ${labelDamageMode(inputs.damageMode, inputs.damageParams)}`,
-          `Feel No Pain: ${inputs.fnp.enabled ? inputs.fnp.target + "+" : "aus"}`,
-          `Sustained Hits: ${inputs.sustained.enabled ? `an, X=${inputs.sustained.value}, kritisch ab ${inputs.sustained.crit}+` : "aus"}`,
-          `Lethal Hits: ${inputs.lethal.enabled ? `an, kritisch ab ${inputs.lethal.crit}+` : "aus"}`,
-          `Hit Re-Roll: ${labelReroll(inputs.hitReroll)}`,
-          `Wound Re-Roll: ${labelReroll(inputs.woundReroll)}`,
-          `Devastating Wounds: ${inputs.dev.enabled ? `an, kritisch ab ${inputs.dev.crit}+` : "aus"}`
-        ];
-
-        if (inputs.targetProfile) {
-          items.push(`Zielprofil: ${inputs.targetProfile.modelCount} Modelle, ${inputs.targetProfile.woundsPerModel} LP`);
-        } else {
-          items.push("Zielprofil: keines");
-        }
-
-        return items.map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
-      }
-
-      function renderDistribution(title, distribution, expected, thresholdValue, thresholdPercent) {
-        const maxProbability = distribution.reduce((max, probability) => Math.max(max, probability), EPSILON);
-        const expectedAnchor = Math.max(0, Math.min(distribution.length - 1, Math.round(expected)));
-        const rows = distribution.map((probability, value) => {
-          const barWidth = `${(probability / maxProbability) * 100}%`;
-          const rowClasses = [
-            "dist-row",
-            value === thresholdValue ? "is-threshold" : "",
-            value === expectedAnchor ? "is-expected" : ""
-          ].filter(Boolean).join(" ");
-
-          const badges = [];
-          if (value === thresholdValue) badges.push(`<span class="badge threshold">Marke</span>`);
-          if (value === expectedAnchor) badges.push(`<span class="badge">EV ~ ${expectedAnchor}</span>`);
-
-          return `
-            <div class="${rowClasses}">
-              <div class="dist-label">${value}</div>
-              <div>
-                <div class="dist-bar"><div class="dist-fill" style="width:${barWidth};"></div></div>
-                ${badges.length ? `<div class="badge-row">${badges.join("")}</div>` : ""}
-              </div>
-              <div class="dist-prob">${formatPercent(probability)}</div>
-            </div>
-          `;
-        }).join("");
-
-        return `
-          <div class="distribution-card">
-            <h3>${escapeHtml(title)}</h3>
-            <div class="distribution-meta">
-              <span class="pill">Erwartungswert ${formatNumber(expected)}</span>
-              <span class="pill">${thresholdPercent}% Bezug</span>
-            </div>
-            <div class="distribution-scroll">${rows}</div>
-          </div>
-        `;
-      }
-
-      function renderStat(label, value) {
-        return `
-          <div class="stat">
-            <small>${escapeHtml(label)}</small>
-            <strong>${formatNumber(value)}</strong>
-          </div>
-        `;
-      }
-
-      function buildCompactProbabilityRows(distribution, startValue, endValue) {
-        const rows = [];
-        rows.push(`
-          <div class="list-row">
-            <span class="prob-line">0: <strong>${formatPercent(tailProbability(distribution, 0))}</strong> <small>(${formatPercent(exactProbability(distribution, 0))})</small></span>
-          </div>
-        `);
-        for (let value = startValue; value <= endValue; value += 1) {
-          rows.push(`
-            <div class="list-row">
-              <span class="prob-line">${value}: <strong>${formatPercent(tailProbability(distribution, value))}</strong> <small>(${formatPercent(exactProbability(distribution, value))})</small></span>
-            </div>
-          `);
-        }
-        return rows.join("");
-      }
-
-      function renderErrors(errors) {
-        ids.errorContainer.classList.remove("hidden");
-        ids.errorContainer.innerHTML = `<div class="error-box">${errors.map(error => `<div>${escapeHtml(error)}</div>`).join("")}</div>`;
-      }
-
-      function clearErrors() {
-        ids.errorContainer.classList.add("hidden");
-        ids.errorContainer.innerHTML = "";
-      }
-
-      function saveHistory() {
-        try {
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(historyEntries));
-        } catch {
-          showToast("Speichern der Historie fehlgeschlagen.");
-        }
-      }
-
-      function saveUiState() {
-        try {
-          localStorage.setItem(UI_STATE_KEY, JSON.stringify(uiState));
-        } catch {}
-      }
-
-      function loadHistory() {
-        try {
-          const raw = localStorage.getItem(HISTORY_KEY);
-          if (!raw) return [];
-          const parsed = JSON.parse(raw);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      }
-
-      function loadUiState() {
-        try {
-          const raw = localStorage.getItem(UI_STATE_KEY);
-          if (!raw) return {};
-          const parsed = JSON.parse(raw);
-          return parsed && typeof parsed === "object" ? parsed : {};
-        } catch {
-          return {};
-        }
-      }
-
-      function restoreAccordionState() {
-        ids.specialRulesDetails.open = Boolean(uiState.specialRulesDetails);
-        ids.targetProfileDetails.open = Boolean(uiState.targetProfileDetails);
-      }
-
-      function updateSectionSummaries() {
-        const rules = [];
-
-        if (ids.sustainedEnabled.checked) rules.push(`Sustained ${cleanSummaryValue(ids.sustainedValue.value, "1")}`);
-        if (ids.lethalEnabled.checked) rules.push("Lethal");
-        if (ids.hitReroll.value !== "none") rules.push(`RR Hit ${shortReroll(ids.hitReroll.value)}`);
-        if (ids.woundReroll.value !== "none") rules.push(`RR Wound ${shortReroll(ids.woundReroll.value)}`);
-        if (ids.devEnabled.checked) rules.push("Dev Wounds");
-        if (ids.fnpEnabled.checked) rules.push(`FNP ${cleanSummaryValue(ids.fnpTarget.value, "5")}+`);
-
-        ids.specialRulesSummary.textContent = rules.length ? rules.join(", ") : "aus";
-
-        const models = cleanSummaryValue(readDuplicateFieldValue("modelCount"), "");
-        const wounds = cleanSummaryValue(readDuplicateFieldValue("woundsPerModel"), "");
-        ids.targetProfileSummary.textContent =
-          models && wounds ? `${models} Modelle à ${wounds} LP` : "aus";
-      }
-
-      function cleanSummaryValue(value, fallback) {
-        const trimmed = String(value ?? "").trim();
-        return trimmed || fallback;
-      }
-
-      function shortReroll(value) {
-        if (value === "ones") return "1";
-        if (value === "failed") return "fail";
-        return value;
-      }
-
-      function buildCsvRow(entry) {
-        const row = {
-          id: entry.id,
-          zeit: formatDate(entry.createdAt),
-          attackenmodus: labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams),
-          trefferwert: `${entry.inputs.hitTarget}+`,
-          verwundungswert: `${entry.inputs.woundTarget}+`,
-          save: entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`,
-          schadensmodus: labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams),
-          fnp: entry.inputs.fnp.enabled ? `${entry.inputs.fnp.target}+` : "aus",
-          sustained: entry.inputs.sustained.enabled ? `an; X=${entry.inputs.sustained.value}; crit=${entry.inputs.sustained.crit}+` : "aus",
-          lethal: entry.inputs.lethal.enabled ? `an; crit=${entry.inputs.lethal.crit}+` : "aus",
-          hit_reroll: labelReroll(entry.inputs.hitReroll),
-          wound_reroll: labelReroll(entry.inputs.woundReroll),
-          dev: entry.inputs.dev.enabled ? `an; crit=${entry.inputs.dev.crit}+` : "aus",
-          zielprofil: entry.inputs.targetProfile ? `${entry.inputs.targetProfile.modelCount} Modelle / ${entry.inputs.targetProfile.woundsPerModel} LP` : "",
-          erwartete_treffer: formatNumber(entry.outputs.expected.hits),
-          erwartete_verwundungen: formatNumber(entry.outputs.expected.wounds),
-          erwartete_unsaved_wounds: formatNumber(entry.outputs.expected.unsaved),
-          erwarteter_gesamtschaden: formatNumber(entry.outputs.expected.damage),
-          kill_output: entry.outputs.killResults ? entry.outputs.killResults.expectedKillOutput : "",
-          unsaved_verteilung: buildDistributionExport(entry.outputs.distributions.unsaved),
-          kill_verteilung: entry.outputs.killResults ? buildDistributionExport(entry.outputs.killResults.killDistribution) : ""
-        };
-
-        const values = Object.values(row).map(csvQuote);
-        return values.join(",");
-      }
-
-      async function copyToClipboard(text) {
-        try {
-          if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
-            return true;
-          }
-        } catch {}
-
-        try {
-          const textarea = document.createElement("textarea");
-          textarea.value = text;
-          textarea.setAttribute("readonly", "");
-          textarea.style.position = "absolute";
-          textarea.style.left = "-9999px";
-          document.body.appendChild(textarea);
-          textarea.select();
-          const success = document.execCommand("copy");
-          document.body.removeChild(textarea);
-          return success;
-        } catch {
-          return false;
-        }
-      }
-
-      function showToast(message) {
-        ids.toast.textContent = message;
-        ids.toast.classList.add("show");
-        clearTimeout(showToast.timeoutId);
-        showToast.timeoutId = setTimeout(() => ids.toast.classList.remove("show"), 1800);
-      }
-
-      function cleanNumber(value) {
-        return String(value ?? "").trim();
-      }
-
-      function parsePositiveInt(value) {
-        const raw = cleanNumber(value);
-        if (!/^\d+$/.test(raw)) return null;
-        const parsed = Number(raw);
-        return parsed >= 1 ? parsed : null;
-      }
-
-      function parseBoundedInt(value, min, max) {
-        const parsed = parsePositiveInt(value);
-        if (parsed === null) return null;
-        return parsed >= min && parsed <= max ? parsed : null;
-      }
-
-      function cryptoSafeId() {
-        return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      }
-
-      function labelReroll(value) {
-        if (value === "ones") return "1er wiederholen";
-        if (value === "failed") return "alle Misses wiederholen";
-        return "keine";
-      }
-
-      function labelAttackMode(mode, params) {
-        switch (mode) {
-          case "fix": return `fix ${params.attackFixed}`;
-          case "xw3": return `${params.attackX} × W3`;
-          case "xw6": return `${params.attackX} × W6`;
-          case "xw3y": return `${params.attackX} × (W3 + ${params.attackY})`;
-          case "xw6y": return `${params.attackX} × (W6 + ${params.attackY})`;
-          default: return mode;
-        }
-      }
-
-      function labelDamageMode(mode, params) {
-        switch (mode) {
-          case "fix": return `fix ${params.damageFixed}`;
-          case "w3": return "W3";
-          case "w6": return "W6";
-          case "w3x": return `W3 + ${params.damageX}`;
-          case "w6x": return `W6 + ${params.damageX}`;
-          default: return mode;
-        }
-      }
-
-      function csvQuote(value) {
-        const stringValue = String(value ?? "");
-        return `"${stringValue.replaceAll('"', '""')}"`;
-      }
-
-      function buildDistributionExport(distribution) {
-        const parts = [`genau 0: ${formatPercent(exactProbability(distribution, 0))}`];
-        for (let value = 1; value < distribution.length; value += 1) {
-          parts.push(`min ${value}: ${formatPercent(tailProbability(distribution, value))} / genau ${value}: ${formatPercent(exactProbability(distribution, value))}`);
-        }
-        return parts.join(" | ");
-      }
-
-      function calculateAll(data) {
-        const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
-        const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
-        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
-
-        const hitBranches = buildHitBranchProbabilities(data);
-        const woundOutcome = buildWoundOutcomeProbabilities(data);
-        const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
-        const saveSuccessProbability = 1 - saveFailProbability;
-
-        const normalHit = {
-          woundCountDist: [1 - (woundOutcome.normal + woundOutcome.dev), woundOutcome.normal + woundOutcome.dev],
-          unsavedCountDist: [1 - (woundOutcome.normal * saveFailProbability + woundOutcome.dev), woundOutcome.normal * saveFailProbability + woundOutcome.dev],
-          damageDist: buildDamagePerWoundAttemptDistribution(
-            woundOutcome.fail,
-            woundOutcome.normal,
-            woundOutcome.dev,
-            saveSuccessProbability,
-            saveFailProbability,
-            finalDamagePerUnsaved
-          )
-        };
-
-        const autoWound = {
-          woundCountDist: [0, 1],
-          unsavedCountDist: [saveSuccessProbability, saveFailProbability],
-          damageDist: buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved)
-        };
-
-        const perAttack = buildPerAttackDistributions(hitBranches, normalHit, autoWound, data.sustained);
-        const totalHits = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.hits);
-        const totalWounds = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.wounds);
-        const totalUnsaved = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.unsaved);
-        const totalDamage = buildTotalDistributionFromAttackCount(attackCountDist, perAttack.damage);
-
-        const expected = {
-          hits: expectedValue(totalHits),
-          wounds: expectedValue(totalWounds),
-          unsaved: expectedValue(totalUnsaved),
-          damage: expectedValue(totalDamage)
-        };
-
-        const killResults = data.targetProfile
-          ? buildKillResults(attackCountDist, hitBranches, normalHit.damageDist, autoWound.damageDist, data.sustained, data.targetProfile)
-          : null;
-
-        return {
-          expected,
-          trace: buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults),
-          distributions: {
-            unsaved: totalUnsaved,
-            kills: killResults ? killResults.killDistribution : null
-          },
-          killResults
-        };
-      }
-
-      function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile) {
-        const { modelCount, woundsPerModel } = targetProfile;
-        const stateSize = (modelCount + 1) * woundsPerModel;
-        const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
-        const branchSpecs = [
-          { weight: hitBranches.miss, normalHits: 0, autoWounds: 0 },
-          { weight: hitBranches.normal, normalHits: 1, autoWounds: 0 },
-          { weight: hitBranches.sustainedOnly, normalHits: 1 + sustained.value, autoWounds: 0 },
-          { weight: hitBranches.lethalOnly, normalHits: 0, autoWounds: 1 },
-          { weight: hitBranches.both, normalHits: sustained.value, autoWounds: 1 }
-        ].filter(branch => branch.weight > EPSILON);
-
-        const branchTransitions = branchSpecs.map(branch => ({
-          weight: branch.weight,
-          byRemainder: buildBranchTransitionByRemainder(
-            branch.normalHits,
-            branch.autoWounds,
-            normalDamageDist,
-            autoDamageDist,
-            woundsPerModel
-          )
-        }));
-
-        let totalStateDist = Array(stateSize).fill(0);
-        let currentStateDist = Array(stateSize).fill(0);
-        currentStateDist[stateIndex(0, 0, woundsPerModel)] = 1;
-
-        for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
-          const probability = attackCountDist[attacks] || 0;
-          if (probability > EPSILON) {
-            for (let index = 0; index < stateSize; index += 1) {
-              totalStateDist[index] += currentStateDist[index] * probability;
-            }
-          }
-          if (attacks < attackCountDist.length - 1) {
-            currentStateDist = applySingleAttackToStateDist(
-              currentStateDist,
-              branchTransitions,
-              modelCount,
-              woundsPerModel,
-              absorbIndex
-            );
-          }
-        }
-
-        const killDistribution = Array(modelCount + 1).fill(0);
-        let expectedEffectiveDamage = 0;
-
-        for (let kills = 0; kills <= modelCount; kills += 1) {
-          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
-            const probability = totalStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
-            if (probability < EPSILON) continue;
-            killDistribution[kills] += probability;
-            expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
-          }
-        }
-
-        return {
-          killDistribution: trimDistribution(killDistribution),
-          chances: [],
-          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
-        };
-      }
-
-      function renderHistory() {
-        if (!historyEntries.length) {
-          ids.historyContainer.innerHTML = `
-            <section class="card panel">
               <div class="note-box">Noch keine Berechnung gespeichert.</div>
             </section>
           `;
@@ -2626,7 +1613,6 @@
       }
 
       function renderHistoryCard(entry, index) {
-        const killSection = entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : "";
         return `
           <article class="card history-card">
             <details class="history-details" ${index === 0 ? "open" : ""}>
@@ -2661,8 +1647,8 @@
                 </details>
 
                 <div class="stack">
-                  ${renderOutputSections(entry.outputs, entry.inputs)}
-                  ${killSection}
+                  ${renderOutputSections(entry.outputs)}
+                  ${entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : ""}
                 </div>
               </div>
             </details>
@@ -2670,8 +1656,7 @@
         `;
       }
 
-      function renderOutputSections(outputs, inputs) {
-        const unsavedRows = buildCompactProbabilityRows(outputs.distributions.unsaved, 0, outputs.distributions.unsaved.length - 1);
+      function renderOutputSections(outputs) {
         return `
           <section class="mini-card">
             <div class="card-title">
@@ -2704,14 +1689,13 @@
             </div>
             <div class="distribution-hint">X: min (genau X)</div>
             <div class="min-list">
-              ${unsavedRows}
+              ${buildProbabilityRows(outputs.distributions.unsaved)}
             </div>
           </section>
         `;
       }
 
       function renderKillSection(killResults, inputs) {
-        const rows = buildCompactProbabilityRows(killResults.killDistribution, 0, inputs.targetProfile.modelCount);
         return `
           <section class="mini-card">
             <div class="card-title">
@@ -2725,20 +1709,16 @@
               </div>
             </div>
             <div class="distribution-hint">X: min (genau X)</div>
-            <div class="kill-list" style="margin-top:12px;">
-              ${rows}
+            <div class="kill-list">
+              ${buildProbabilityRows(killResults.killDistribution)}
             </div>
           </section>
         `;
       }
 
-      function renderDistributions() {
-        return "";
-      }
-
-      function buildCompactProbabilityRows(distribution, startValue, endValue) {
+      function buildProbabilityRows(distribution) {
         const rows = [];
-        for (let value = startValue; value <= endValue; value += 1) {
+        for (let value = 0; value < distribution.length; value += 1) {
           rows.push(`
             <div class="list-row">
               <span class="prob-line">${value}: <strong>${formatPercent(tailProbability(distribution, value))}</strong> <small>(${formatPercent(exactProbability(distribution, value))})</small></span>
@@ -2746,6 +1726,110 @@
           `);
         }
         return rows.join("");
+      }
+
+      function renderInputsSummary(inputs) {
+        const items = [
+          `Attackenmodus: ${labelAttackMode(inputs.attackMode, inputs.attackParams)}`,
+          `Trefferwert: ${inputs.hitTarget}+`,
+          `Verwundungswert: ${inputs.woundTarget}+`,
+          `Save: ${inputs.saveTarget === null ? "Kein Save" : inputs.saveTarget + "+"}`,
+          `Schadensmodus: ${labelDamageMode(inputs.damageMode, inputs.damageParams)}`,
+          `Feel No Pain: ${inputs.fnp.enabled ? inputs.fnp.target + "+" : "aus"}`,
+          `Sustained Hits: ${inputs.sustained.enabled ? `an, X=${inputs.sustained.value}, kritisch ab ${inputs.sustained.crit}+` : "aus"}`,
+          `Lethal Hits: ${inputs.lethal.enabled ? `an, kritisch ab ${inputs.lethal.crit}+` : "aus"}`,
+          `Hit Re-Roll: ${labelReroll(inputs.hitReroll)}`,
+          `Wound Re-Roll: ${labelReroll(inputs.woundReroll)}`,
+          `Devastating Wounds: ${inputs.dev.enabled ? `an, kritisch ab ${inputs.dev.crit}+` : "aus"}`,
+          `Zielprofil: ${inputs.targetProfile ? `${inputs.targetProfile.modelCount} Modelle, ${inputs.targetProfile.woundsPerModel} LP` : "aus"}`
+        ];
+        return items.map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
+      }
+
+      function renderStat(label, value) {
+        return `
+          <div class="stat">
+            <small>${escapeHtml(label)}</small>
+            <strong>${formatNumber(value)}</strong>
+          </div>
+        `;
+      }
+
+      function updateSectionSummaries() {
+        const rules = [];
+        if (ids.sustainedEnabled.checked) rules.push(`Sustained ${cleanSummary(ids.sustainedValue.value, "1")}`);
+        if (ids.lethalEnabled.checked) rules.push("Lethal");
+        if (ids.hitReroll.value !== "none") rules.push(`RR Hit ${shortReroll(ids.hitReroll.value)}`);
+        if (ids.woundReroll.value !== "none") rules.push(`RR Wound ${shortReroll(ids.woundReroll.value)}`);
+        if (ids.devEnabled.checked) rules.push("Dev Wounds");
+        if (ids.fnpEnabled.checked) rules.push(`FNP ${cleanSummary(ids.fnpTarget.value, "5")}+`);
+        ids.specialRulesSummary.textContent = rules.length ? rules.join(", ") : "aus";
+
+        const models = cleanSummary(ids.modelCount.value, "");
+        const wounds = cleanSummary(ids.woundsPerModel.value, "");
+        ids.targetProfileSummary.textContent = models && wounds ? `${models} Modelle à ${wounds} LP` : "aus";
+      }
+
+      function restoreAccordionState() {
+        ids.specialRulesDetails.open = Boolean(uiState.specialRulesDetails);
+        ids.targetProfileDetails.open = Boolean(uiState.targetProfileDetails);
+      }
+
+      function saveHistory() {
+        try {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(historyEntries));
+        } catch {}
+      }
+
+      function loadHistory() {
+        try {
+          const raw = localStorage.getItem(HISTORY_KEY);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveUiState() {
+        try {
+          localStorage.setItem(UI_STATE_KEY, JSON.stringify(uiState));
+        } catch {}
+      }
+
+      function loadUiState() {
+        try {
+          const raw = localStorage.getItem(UI_STATE_KEY);
+          if (!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" ? parsed : {};
+        } catch {
+          return {};
+        }
+      }
+
+      async function copyToClipboard(text) {
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch {}
+
+        try {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "absolute";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          const success = document.execCommand("copy");
+          document.body.removeChild(textarea);
+          return success;
+        } catch {
+          return false;
+        }
       }
 
       function buildCsvRow(entry) {
@@ -2784,23 +1868,98 @@
         return parts.join(" | ");
       }
 
+      function renderErrors(errors) {
+        ids.errorContainer.classList.remove("hidden");
+        ids.errorContainer.innerHTML = `<div class="error-box">${errors.map(error => `<div>${escapeHtml(error)}</div>`).join("")}</div>`;
+      }
+
+      function clearErrors() {
+        ids.errorContainer.classList.add("hidden");
+        ids.errorContainer.innerHTML = "";
+      }
+
+      function showToast(message) {
+        ids.toast.textContent = message;
+        ids.toast.classList.add("show");
+        clearTimeout(showToast.timeoutId);
+        showToast.timeoutId = setTimeout(() => ids.toast.classList.remove("show"), 1800);
+      }
+
+      function cleanNumber(value) {
+        return String(value ?? "").trim();
+      }
+
+      function cleanSummary(value, fallback) {
+        const trimmed = String(value ?? "").trim();
+        return trimmed || fallback;
+      }
+
+      function parsePositiveInt(value) {
+        const raw = cleanNumber(value);
+        if (!/^\d+$/.test(raw)) return null;
+        const parsed = Number(raw);
+        return parsed >= 1 ? parsed : null;
+      }
+
+      function parseBoundedInt(value, min, max) {
+        const parsed = parsePositiveInt(value);
+        if (parsed === null) return null;
+        return parsed >= min && parsed <= max ? parsed : null;
+      }
+
+      function createId() {
+        return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+
+      function shortReroll(value) {
+        if (value === "ones") return "1";
+        if (value === "failed") return "fail";
+        return value;
+      }
+
+      function labelReroll(value) {
+        if (value === "ones") return "1er wiederholen";
+        if (value === "failed") return "alle Misses wiederholen";
+        return "keine";
+      }
+
+      function labelAttackMode(mode, params) {
+        switch (mode) {
+          case "fix": return `fix ${params.attackFixed}`;
+          case "xw3": return `${params.attackX} × W3`;
+          case "xw6": return `${params.attackX} × W6`;
+          case "xw3y": return `${params.attackX} × (W3 + ${params.attackY})`;
+          case "xw6y": return `${params.attackX} × (W6 + ${params.attackY})`;
+          default: return mode;
+        }
+      }
+
+      function labelDamageMode(mode, params) {
+        switch (mode) {
+          case "fix": return `fix ${params.damageFixed}`;
+          case "w3": return "W3";
+          case "w6": return "W6";
+          case "w3x": return `W3 + ${params.damageX}`;
+          case "w6x": return `W6 + ${params.damageX}`;
+          default: return mode;
+        }
+      }
+
+      function csvQuote(value) {
+        const text = String(value ?? "");
+        return `"${text.replaceAll('"', '""')}"`;
+      }
+
       function formatNumber(value) {
-        return Number(value).toLocaleString("de-DE", {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 2
-        });
+        return Number(value).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
       }
 
       function formatPercent(value) {
-        return (value * 100).toLocaleString("de-DE", {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1
-        }) + " %";
+        return (value * 100).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
       }
 
       function formatDate(value) {
-        const date = new Date(value);
-        return date.toLocaleString("de-DE", {
+        return new Date(value).toLocaleString("de-DE", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",
