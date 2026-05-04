@@ -1966,6 +1966,28 @@
         return current;
       }
 
+      function binomialDistribution(trials, successProbability) {
+        const cacheKey = `${trials}|${successProbability}`;
+        const cached = binomialCache.get(cacheKey);
+        if (cached) return cached.slice();
+
+        let distribution = [1];
+        for (let trial = 0; trial < trials; trial += 1) {
+          const next = Array(distribution.length + 1).fill(0);
+          for (let successes = 0; successes < distribution.length; successes += 1) {
+            const probability = distribution[successes] || 0;
+            if (probability < EPSILON) continue;
+            next[successes] += probability * (1 - successProbability);
+            next[successes + 1] += probability * successProbability;
+          }
+          distribution = next;
+        }
+
+        const trimmed = trimDistribution(distribution);
+        binomialCache.set(cacheKey, trimmed);
+        return trimmed.slice();
+      }
+
       function convolveScalar(a, b) {
         const output = Array(a.length + b.length - 1).fill(0);
         for (let i = 0; i < a.length; i += 1) {
