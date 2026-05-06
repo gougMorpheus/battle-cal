@@ -923,6 +923,7 @@
                   <select id="hitReroll">
                     <option value="none">keine</option>
                     <option value="ones">Trefferwürfe von 1 wiederholen</option>
+                    <option value="single">einen Trefferwurf wiederholen</option>
                     <option value="failed">alle misslungenen Trefferwürfe wiederholen</option>
                   </select>
                 </div>
@@ -931,6 +932,7 @@
                   <select id="woundReroll">
                     <option value="none">keine</option>
                     <option value="ones">Verwundungswürfe von 1 wiederholen</option>
+                    <option value="single">einen Verwundungswurf wiederholen</option>
                     <option value="failed">alle misslungenen Verwundungswürfe wiederholen</option>
                   </select>
                 </div>
@@ -1570,6 +1572,8 @@
       }
 
       function calculateAll(data) {
+        if (usesSingleReroll(data)) return calculateAllWithSingleRerolls(data);
+
         const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
         const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
         const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
@@ -1625,6 +1629,382 @@
           },
           killResults
         };
+      }
+
+      function usesSingleReroll(data) {
+        return data.hitReroll === "single" || data.woundReroll === "single";
+      }
+
+      function calculateAllWithSingleRerolls(data) {
+        const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
+        const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
+        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
+        const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
+        const saveSuccessProbability = 1 - saveFailProbability;
+
+        const stats = buildTotalStatsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved);
+        const expected = {
+          hits: expectedValue(stats.hits),
+          wounds: expectedValue(stats.wounds),
+          unsaved: expectedValue(stats.unsaved),
+          damage: expectedValue(stats.damage)
+        };
+
+        const killResults = data.targetProfile
+          ? buildKillResultsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved)
+          : null;
+
+        return {
+          expected,
+          trace: buildSingleRerollTrace(data, attackCountDist, finalDamagePerUnsaved, expected, killResults),
+          distributions: {
+            unsaved: stats.unsaved,
+            kills: killResults ? killResults.killDistribution : null
+          },
+          killResults
+        };
+      }
+
+      function buildSingleRerollTrace(data, attackCountDist, finalDamagePerUnsaved, expected, killResults) {
+        const lines = [
+          `Erwartete Attacken: ${formatNumber(expectedValue(attackCountDist))}`,
+          `Einmalige Re-Rolls: Treffer ${data.hitReroll === "single" ? "an" : "aus"}, Verwundung ${data.woundReroll === "single" ? "an" : "aus"}`,
+          `Erwartete Treffer gesamt: â‰ˆ ${formatNumber(expected.hits)}`,
+          `Erwartete Verwundungen gesamt: â‰ˆ ${formatNumber(expected.wounds)}`,
+          `Erwartete unsaved wounds gesamt: â‰ˆ ${formatNumber(expected.unsaved)}`,
+          `Erwarteter Schaden pro unsaved wound nach FNP: ${formatNumber(expectedValue(finalDamagePerUnsaved))}`,
+          `Erwarteter Gesamtschaden: â‰ˆ ${formatNumber(expected.damage)}`
+        ];
+
+        if (killResults) lines.push(`Erwarteter Kill-Output: ${killResults.expectedKillOutput}`);
+        return lines;
+      }
+
+      function buildTotalStatsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, damageDist) {
+        const maxAttacks = attackCountDist.length - 1;
+        let current = new Map([[statsKey(0, 0, 0, 0, initialHitRerollToken(data), initialWoundRerollToken(data)), 1]]);
+        const totals = { hits: [0], wounds: [0], unsaved: [0], damage: [0] };
+
+        for (let attacks = 0; attacks <= maxAttacks; attacks += 1) {
+          const attackProbability = attackCountDist[attacks] || 0;
+          if (attackProbability > EPSILON) {
+            current.forEach((probability, key) => {
+              const state = parseStatsKey(key);
+              totals.hits = addWeightedDistribution(totals.hits, deltaDistribution(state.hits), probability * attackProbability);
+              totals.wounds = addWeightedDistribution(totals.wounds, deltaDistribution(state.wounds), probability * attackProbability);
+              totals.unsaved = addWeightedDistribution(totals.unsaved, deltaDistribution(state.unsaved), probability * attackProbability);
+              totals.damage = addWeightedDistribution(totals.damage, deltaDistribution(state.damage), probability * attackProbability);
+            });
+          }
+
+          if (attacks < maxAttacks) {
+            current = applySingleAttackToStats(current, data, saveSuccessProbability, saveFailProbability, damageDist);
+          }
+        }
+
+        return {
+          hits: trimDistribution(totals.hits),
+          wounds: trimDistribution(totals.wounds),
+          unsaved: trimDistribution(totals.unsaved),
+          damage: trimDistribution(totals.damage)
+        };
+      }
+
+      function applySingleAttackToStats(stateDist, data, saveSuccessProbability, saveFailProbability, damageDist) {
+        const next = new Map();
+        stateDist.forEach((stateProbability, key) => {
+          const baseState = parseStatsKey(key);
+          for (const hitBranch of buildSingleAttackHitBranches(data, baseState.hitRerollToken)) {
+            const afterHit = {
+              ...baseState,
+              hits: baseState.hits + hitBranch.hits,
+              hitRerollToken: hitBranch.hitRerollToken
+            };
+
+            const woundStates = resolveNormalWoundAttemptsForStats([{
+              state: afterHit,
+              probability: stateProbability * hitBranch.probability
+            }], hitBranch.normalHits, data, saveSuccessProbability, saveFailProbability, damageDist);
+            const finalStates = resolveAutoWoundsForStats(woundStates, hitBranch.autoWounds, saveSuccessProbability, saveFailProbability, damageDist);
+            finalStates.forEach(({ state, probability }) => addMapProbability(next, statsKey(state.hits, state.wounds, state.unsaved, state.damage, state.hitRerollToken, state.woundRerollToken), probability));
+          }
+        });
+        return next;
+      }
+
+      function buildKillResultsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, damageDist) {
+        const { modelCount, woundsPerModel } = data.targetProfile;
+        const initialState = computePreDamageState(data.targetProfile, data.preDamage);
+        const maxAttacks = attackCountDist.length - 1;
+        let current = new Map([[killStateKey(initialState.kills, initialState.remainder, initialHitRerollToken(data), initialWoundRerollToken(data)), 1]]);
+        let total = new Map();
+
+        for (let attacks = 0; attacks <= maxAttacks; attacks += 1) {
+          const attackProbability = attackCountDist[attacks] || 0;
+          if (attackProbability > EPSILON) {
+            current.forEach((probability, key) => addMapProbability(total, key, probability * attackProbability));
+          }
+          if (attacks < maxAttacks) {
+            current = applySingleAttackToKillStates(current, data, saveSuccessProbability, saveFailProbability, damageDist);
+          }
+        }
+
+        const killDistribution = Array(modelCount + 1).fill(0);
+        let expectedEffectiveDamage = 0;
+        total.forEach((probability, key) => {
+          const state = parseKillStateKey(key);
+          killDistribution[state.kills] += probability;
+          expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, state.kills * woundsPerModel + state.remainder);
+        });
+
+        return {
+          killDistribution: trimDistribution(killDistribution),
+          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
+        };
+      }
+
+      function applySingleAttackToKillStates(stateDist, data, saveSuccessProbability, saveFailProbability, damageDist) {
+        const next = new Map();
+        stateDist.forEach((stateProbability, key) => {
+          const baseState = parseKillStateKey(key);
+          if (baseState.kills >= data.targetProfile.modelCount) {
+            addMapProbability(next, key, stateProbability);
+            return;
+          }
+
+          for (const hitBranch of buildSingleAttackHitBranches(data, baseState.hitRerollToken)) {
+            const afterHit = { ...baseState, hitRerollToken: hitBranch.hitRerollToken };
+            const woundStates = resolveNormalWoundAttemptsForKill([{
+              state: afterHit,
+              probability: stateProbability * hitBranch.probability
+            }], hitBranch.normalHits, data, saveSuccessProbability, saveFailProbability, damageDist);
+            const finalStates = resolveAutoWoundsForKill(woundStates, hitBranch.autoWounds, data.targetProfile, saveSuccessProbability, saveFailProbability, damageDist);
+            finalStates.forEach(({ state, probability }) => addMapProbability(next, killStateKey(state.kills, state.remainder, state.hitRerollToken, state.woundRerollToken), probability));
+          }
+        });
+        return next;
+      }
+
+      function buildSingleAttackHitBranches(data, hitRerollToken) {
+        if (data.hitReroll !== "single") {
+          const finalRollDist = buildFinalRollDistribution(data.hitReroll, roll => isHitSuccess(roll, data));
+          return buildHitBranchesFromRollDistribution(finalRollDist, hitRerollToken, data);
+        }
+
+        let branches = [];
+        for (let firstRoll = 1; firstRoll <= 6; firstRoll += 1) {
+          const firstSuccess = isHitSuccess(firstRoll, data);
+          if (!firstSuccess && hitRerollToken) {
+            for (let secondRoll = 1; secondRoll <= 6; secondRoll += 1) {
+              branches.push(buildHitBranchFromRoll(secondRoll, 1 / 36, 0, data));
+            }
+          } else {
+            branches.push(buildHitBranchFromRoll(firstRoll, 1 / 6, hitRerollToken, data));
+          }
+        }
+        return mergeHitBranches(branches);
+      }
+
+      function buildHitBranchesFromRollDistribution(rollDistribution, hitRerollToken, data) {
+        const branches = [];
+        for (let roll = 1; roll <= 6; roll += 1) {
+          const probability = rollDistribution[roll] || 0;
+          if (probability > EPSILON) branches.push(buildHitBranchFromRoll(roll, probability, hitRerollToken, data));
+        }
+        return mergeHitBranches(branches);
+      }
+
+      function buildHitBranchFromRoll(roll, probability, hitRerollToken, data) {
+        const sustainedCrit = data.sustained.enabled && roll >= data.sustained.crit;
+        const lethalCrit = data.lethal.enabled && roll >= data.lethal.crit;
+        const success = isHitSuccess(roll, data);
+
+        if (!success) return { probability, hits: 0, normalHits: 0, autoWounds: 0, hitRerollToken };
+        if (sustainedCrit && lethalCrit) return { probability, hits: 1 + data.sustained.value, normalHits: data.sustained.value, autoWounds: 1, hitRerollToken };
+        if (sustainedCrit) return { probability, hits: 1 + data.sustained.value, normalHits: 1 + data.sustained.value, autoWounds: 0, hitRerollToken };
+        if (lethalCrit) return { probability, hits: 1, normalHits: 0, autoWounds: 1, hitRerollToken };
+        return { probability, hits: 1, normalHits: 1, autoWounds: 0, hitRerollToken };
+      }
+
+      function mergeHitBranches(branches) {
+        const merged = new Map();
+        branches.forEach(branch => {
+          const key = `${branch.hits}|${branch.normalHits}|${branch.autoWounds}|${branch.hitRerollToken}`;
+          const current = merged.get(key);
+          if (current) current.probability += branch.probability;
+          else merged.set(key, { ...branch });
+        });
+        return Array.from(merged.values()).filter(branch => branch.probability > EPSILON);
+      }
+
+      function resolveNormalWoundAttemptsForStats(states, count, data, saveSuccessProbability, saveFailProbability, damageDist) {
+        let current = states;
+        for (let i = 0; i < count; i += 1) {
+          const next = [];
+          current.forEach(({ state, probability }) => {
+            buildWoundAttemptOutcomes(data, state.woundRerollToken).forEach(outcome => {
+              const woundState = { ...state, woundRerollToken: outcome.woundRerollToken };
+              applyWoundOutcomeToStats(woundState, probability * outcome.probability, outcome.kind, saveSuccessProbability, saveFailProbability, damageDist, next);
+            });
+          });
+          current = next;
+        }
+        return current;
+      }
+
+      function resolveAutoWoundsForStats(states, count, saveSuccessProbability, saveFailProbability, damageDist) {
+        let current = states;
+        for (let i = 0; i < count; i += 1) {
+          const next = [];
+          current.forEach(({ state, probability }) => applyWoundOutcomeToStats(state, probability, "normal", saveSuccessProbability, saveFailProbability, damageDist, next));
+          current = next;
+        }
+        return current;
+      }
+
+      function applyWoundOutcomeToStats(state, probability, kind, saveSuccessProbability, saveFailProbability, damageDist, output) {
+        if (kind === "fail") {
+          output.push({ state, probability });
+          return;
+        }
+
+        const wounded = { ...state, wounds: state.wounds + 1 };
+        if (kind === "dev") {
+          damageDist.forEach((damageProbability, damage) => {
+            if (damageProbability > EPSILON) output.push({ state: { ...wounded, unsaved: wounded.unsaved + 1, damage: wounded.damage + damage }, probability: probability * damageProbability });
+          });
+          return;
+        }
+
+        output.push({ state: wounded, probability: probability * saveSuccessProbability });
+        damageDist.forEach((damageProbability, damage) => {
+          if (damageProbability > EPSILON) output.push({ state: { ...wounded, unsaved: wounded.unsaved + 1, damage: wounded.damage + damage }, probability: probability * saveFailProbability * damageProbability });
+        });
+      }
+
+      function resolveNormalWoundAttemptsForKill(states, count, data, saveSuccessProbability, saveFailProbability, damageDist) {
+        let current = states;
+        for (let i = 0; i < count; i += 1) {
+          const next = [];
+          current.forEach(({ state, probability }) => {
+            buildWoundAttemptOutcomes(data, state.woundRerollToken).forEach(outcome => {
+              const woundState = { ...state, woundRerollToken: outcome.woundRerollToken };
+              applyWoundOutcomeToKill(woundState, probability * outcome.probability, outcome.kind, data.targetProfile, saveSuccessProbability, saveFailProbability, damageDist, next);
+            });
+          });
+          current = next;
+        }
+        return current;
+      }
+
+      function resolveAutoWoundsForKill(states, count, targetProfile, saveSuccessProbability, saveFailProbability, damageDist) {
+        let current = states;
+        for (let i = 0; i < count; i += 1) {
+          const next = [];
+          current.forEach(({ state, probability }) => applyWoundOutcomeToKill(state, probability, "normal", targetProfile, saveSuccessProbability, saveFailProbability, damageDist, next));
+          current = next;
+        }
+        return current;
+      }
+
+      function applyWoundOutcomeToKill(state, probability, kind, targetProfile, saveSuccessProbability, saveFailProbability, damageDist, output) {
+        if (kind === "fail" || state.kills >= targetProfile.modelCount) {
+          output.push({ state, probability });
+          return;
+        }
+
+        if (kind === "normal") output.push({ state, probability: probability * saveSuccessProbability });
+        const damageProbabilityBase = kind === "dev" ? probability : probability * saveFailProbability;
+        damageDist.forEach((damageProbability, damage) => {
+          if (damageProbability < EPSILON) return;
+          output.push({ state: applyDamageToKillState(state, damage, targetProfile), probability: damageProbabilityBase * damageProbability });
+        });
+      }
+
+      function buildWoundAttemptOutcomes(data, woundRerollToken) {
+        if (data.woundReroll !== "single") {
+          return buildWoundOutcomesFromRollDistribution(buildFinalRollDistribution(data.woundReroll, roll => isWoundSuccess(roll, data)), woundRerollToken, data);
+        }
+
+        let outcomes = [];
+        for (let firstRoll = 1; firstRoll <= 6; firstRoll += 1) {
+          const firstSuccess = isWoundSuccess(firstRoll, data);
+          if (!firstSuccess && woundRerollToken) {
+            for (let secondRoll = 1; secondRoll <= 6; secondRoll += 1) {
+              outcomes.push(buildWoundOutcomeFromRoll(secondRoll, 1 / 36, 0, data));
+            }
+          } else {
+            outcomes.push(buildWoundOutcomeFromRoll(firstRoll, 1 / 6, woundRerollToken, data));
+          }
+        }
+        return mergeWoundOutcomes(outcomes);
+      }
+
+      function buildWoundOutcomesFromRollDistribution(rollDistribution, woundRerollToken, data) {
+        const outcomes = [];
+        for (let roll = 1; roll <= 6; roll += 1) {
+          const probability = rollDistribution[roll] || 0;
+          if (probability > EPSILON) outcomes.push(buildWoundOutcomeFromRoll(roll, probability, woundRerollToken, data));
+        }
+        return mergeWoundOutcomes(outcomes);
+      }
+
+      function buildWoundOutcomeFromRoll(roll, probability, woundRerollToken, data) {
+        const critical = data.dev.enabled && roll >= data.dev.crit;
+        const success = isWoundSuccess(roll, data);
+        return { kind: !success ? "fail" : critical ? "dev" : "normal", probability, woundRerollToken };
+      }
+
+      function mergeWoundOutcomes(outcomes) {
+        const merged = new Map();
+        outcomes.forEach(outcome => {
+          const key = `${outcome.kind}|${outcome.woundRerollToken}`;
+          const current = merged.get(key);
+          if (current) current.probability += outcome.probability;
+          else merged.set(key, { ...outcome });
+        });
+        return Array.from(merged.values()).filter(outcome => outcome.probability > EPSILON);
+      }
+
+      function applyDamageToKillState(state, damage, targetProfile) {
+        if (damage <= 0 || state.kills >= targetProfile.modelCount) return state;
+        const remaining = targetProfile.woundsPerModel - state.remainder;
+        const applied = Math.min(damage, remaining);
+        const filled = state.remainder + applied;
+        if (filled >= targetProfile.woundsPerModel) {
+          return { ...state, kills: Math.min(targetProfile.modelCount, state.kills + 1), remainder: 0 };
+        }
+        return { ...state, remainder: filled };
+      }
+
+      function initialHitRerollToken(data) {
+        return data.hitReroll === "single" ? 1 : 0;
+      }
+
+      function initialWoundRerollToken(data) {
+        return data.woundReroll === "single" ? 1 : 0;
+      }
+
+      function statsKey(hits, wounds, unsaved, damage, hitRerollToken, woundRerollToken) {
+        return `${hits}|${wounds}|${unsaved}|${damage}|${hitRerollToken}|${woundRerollToken}`;
+      }
+
+      function parseStatsKey(key) {
+        const [hits, wounds, unsaved, damage, hitRerollToken, woundRerollToken] = key.split("|").map(Number);
+        return { hits, wounds, unsaved, damage, hitRerollToken, woundRerollToken };
+      }
+
+      function killStateKey(kills, remainder, hitRerollToken, woundRerollToken) {
+        return `${kills}|${remainder}|${hitRerollToken}|${woundRerollToken}`;
+      }
+
+      function parseKillStateKey(key) {
+        const [kills, remainder, hitRerollToken, woundRerollToken] = key.split("|").map(Number);
+        return { kills, remainder, hitRerollToken, woundRerollToken };
+      }
+
+      function addMapProbability(map, key, probability) {
+        if (probability > EPSILON) map.set(key, (map.get(key) || 0) + probability);
       }
 
       function buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults) {
@@ -2623,12 +3003,14 @@
 
       function shortReroll(value) {
         if (value === "ones") return "1";
+        if (value === "single") return "1x";
         if (value === "failed") return "fail";
         return value;
       }
 
       function labelReroll(value) {
         if (value === "ones") return "1er wiederholen";
+        if (value === "single") return "einen Würfel wiederholen";
         if (value === "failed") return "alle Misses wiederholen";
         return "keine";
       }
