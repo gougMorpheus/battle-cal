@@ -471,6 +471,38 @@
       line-height: 1.35;
     }
 
+    .weapon-picker {
+      display: grid;
+      gap: 8px;
+      max-height: 180px;
+      overflow: auto;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .weapon-option {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--text);
+      font-size: 0.88rem;
+      line-height: 1.35;
+    }
+
+    .weapon-option input {
+      width: auto;
+      min-height: 0;
+      margin-top: 3px;
+    }
+
+    .weapon-option small {
+      display: block;
+      color: var(--text-soft);
+    }
+
     .toast,
     .note-box,
     .error-box {
@@ -956,6 +988,35 @@
           <div class="menu-section-title">Vergleich</div>
           <button type="button" id="compareOpenBtn">Vergleich öffnen</button>
         </div>
+
+        <div class="menu-section">
+          <div class="menu-section-title">Armeen</div>
+          <div class="grid">
+            <div class="field">
+              <label for="armyAttackerRoster">Angreifer-Armee</label>
+              <select id="armyAttackerRoster"></select>
+            </div>
+            <div class="field">
+              <label for="armyAttackerUnit">Angreifer-Einheit</label>
+              <select id="armyAttackerUnit"></select>
+            </div>
+            <div class="field">
+              <label>Waffen</label>
+              <div id="armyWeaponList" class="weapon-picker">
+                <div class="muted">Armee laden...</div>
+              </div>
+            </div>
+            <div class="field">
+              <label for="armyTargetRoster">Ziel-Armee</label>
+              <select id="armyTargetRoster"></select>
+            </div>
+            <div class="field">
+              <label for="armyTargetUnit">Ziel-Einheit</label>
+              <select id="armyTargetUnit"></select>
+            </div>
+            <button type="button" id="armyCalculateBtn" class="primary">Aus Armee berechnen</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1283,6 +1344,12 @@
         cloudProfilesRefreshBtn: document.getElementById("cloudProfilesRefreshBtn"),
         cloudProfileRenameBtn: document.getElementById("cloudProfileRenameBtn"),
         cloudProfileDeleteBtn: document.getElementById("cloudProfileDeleteBtn"),
+        armyAttackerRoster: document.getElementById("armyAttackerRoster"),
+        armyAttackerUnit: document.getElementById("armyAttackerUnit"),
+        armyWeaponList: document.getElementById("armyWeaponList"),
+        armyTargetRoster: document.getElementById("armyTargetRoster"),
+        armyTargetUnit: document.getElementById("armyTargetUnit"),
+        armyCalculateBtn: document.getElementById("armyCalculateBtn"),
         attackMode: document.getElementById("attackMode"),
         attackFields: document.getElementById("attackFields"),
         hitTarget: document.getElementById("hitTarget"),
@@ -1327,6 +1394,9 @@
       let cloudProfile = loadCloudProfile();
       let cloudProfiles = [];
       let lastSyncedAt = loadLastSyncedAt();
+      let armyRosters = [];
+      let armyUnitsByRoster = new Map();
+      let armyWeaponsByUnit = new Map();
 
       initSelects();
       renderModeFields("attack");
@@ -1339,6 +1409,7 @@
       updateSyncStatus();
       updateStickyJumpButton();
       initCloud();
+      initArmyPicker();
 
       function initSelects() {
         [ids.hitTarget, ids.woundTarget].forEach(select => {
@@ -1478,6 +1549,23 @@
 
         ids.cloudProfileDeleteBtn.addEventListener("click", async () => {
           await deleteCloudProfile();
+        });
+
+        ids.armyAttackerRoster.addEventListener("change", async () => {
+          await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
+          await renderArmyWeapons();
+        });
+
+        ids.armyAttackerUnit.addEventListener("change", async () => {
+          await renderArmyWeapons();
+        });
+
+        ids.armyTargetRoster.addEventListener("change", async () => {
+          await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
+        });
+
+        ids.armyCalculateBtn.addEventListener("click", () => {
+          calculateFromArmySelection();
         });
 
         ids.clearHistoryBtn.addEventListener("click", async () => {
@@ -3378,6 +3466,303 @@
         if (response.status === 204) return null;
         const text = await response.text();
         return text ? JSON.parse(text) : null;
+      }
+
+      async function initArmyPicker() {
+        if (typeof fetch !== "function") {
+          ids.armyWeaponList.innerHTML = `<div class="muted">Armee-Daten nicht verfügbar.</div>`;
+          return;
+        }
+
+        try {
+          armyRosters = await supabaseRequest("/rest/v1/army_rosters?select=id,name&order=name.asc") || [];
+          renderArmyRosterSelect(ids.armyAttackerRoster);
+          renderArmyRosterSelect(ids.armyTargetRoster);
+          if (armyRosters[0]) {
+            ids.armyAttackerRoster.value = armyRosters[0].id;
+            ids.armyTargetRoster.value = armyRosters[1]?.id || armyRosters[0].id;
+            await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
+            await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
+            await renderArmyWeapons();
+          }
+        } catch {
+          ids.armyWeaponList.innerHTML = `<div class="muted">Armee-Daten konnten nicht geladen werden.</div>`;
+        }
+      }
+
+      function renderArmyRosterSelect(select) {
+        select.innerHTML = armyRosters.length
+          ? armyRosters.map(roster => `<option value="${escapeHtml(roster.id)}">${escapeHtml(roster.name)}</option>`).join("")
+          : `<option value="">Keine Armeen</option>`;
+      }
+
+      async function loadArmyUnits(rosterId) {
+        if (!rosterId) return [];
+        if (armyUnitsByRoster.has(rosterId)) return armyUnitsByRoster.get(rosterId);
+        const units = await supabaseRequest(`/rest/v1/army_units?select=id,name,model_count,toughness,save,wounds_per_model,profile_name&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`) || [];
+        armyUnitsByRoster.set(rosterId, units);
+        return units;
+      }
+
+      async function renderArmyUnitSelect(rosterId, select) {
+        const units = await loadArmyUnits(rosterId);
+        select.innerHTML = units.length
+          ? units.map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)} (${unit.model_count}x)</option>`).join("")
+          : `<option value="">Keine Einheiten</option>`;
+      }
+
+      async function loadArmyWeapons(unitId) {
+        if (!unitId) return [];
+        if (armyWeaponsByUnit.has(unitId)) return armyWeaponsByUnit.get(unitId);
+        const weapons = await supabaseRequest(`/rest/v1/army_weapons?select=id,name,weapon_type,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`) || [];
+        armyWeaponsByUnit.set(unitId, weapons);
+        return weapons;
+      }
+
+      async function renderArmyWeapons() {
+        const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
+        if (!weapons.length) {
+          ids.armyWeaponList.innerHTML = `<div class="muted">Keine Waffen für diese Einheit gefunden.</div>`;
+          return;
+        }
+
+        ids.armyWeaponList.innerHTML = weapons.map((weapon, index) => `
+          <label class="weapon-option">
+            <input type="checkbox" value="${escapeHtml(weapon.id)}" ${index === 0 ? "checked" : ""} />
+            <span>
+              ${escapeHtml(weapon.count)}x ${escapeHtml(cleanWeaponName(weapon.name))}
+              <small>${escapeHtml(weapon.attacks_text)}A, ${escapeHtml(weapon.skill_text || "auto")}, S${escapeHtml(weapon.strength_text)}, DS ${escapeHtml(weapon.ap_text)}, SW ${escapeHtml(weapon.damage_text)}${weapon.keywords?.length ? `, ${escapeHtml(weapon.keywords.join(", "))}` : ""}</small>
+            </span>
+          </label>
+        `).join("");
+      }
+
+      async function calculateFromArmySelection() {
+        const attackerUnits = await loadArmyUnits(ids.armyAttackerRoster.value);
+        const targetUnits = await loadArmyUnits(ids.armyTargetRoster.value);
+        const attacker = attackerUnits.find(unit => unit.id === ids.armyAttackerUnit.value);
+        const target = targetUnits.find(unit => unit.id === ids.armyTargetUnit.value);
+        const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
+        const selectedIds = Array.from(ids.armyWeaponList.querySelectorAll("input[type='checkbox']:checked")).map(input => input.value);
+        const selectedWeapons = weapons.filter(weapon => selectedIds.includes(weapon.id));
+
+        if (!attacker || !target || !selectedWeapons.length) {
+          showToast("Bitte Angreifer, Ziel und mindestens eine Waffe wählen.");
+          return;
+        }
+
+        const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, target, weapon));
+        const invalid = weaponEntries.find(entry => !entry.ok);
+        if (invalid) {
+          showToast(`${cleanWeaponName(invalid.weapon.name)} kann noch nicht automatisch berechnet werden.`);
+          return;
+        }
+
+        const outputs = combineArmyWeaponOutputs(weaponEntries.map(entry => entry.data), target);
+        const newEntry = {
+          id: createId(),
+          createdAt: new Date().toISOString(),
+          customTitle: `${attacker.name} → ${target.name}`,
+          inputs: buildArmyHistoryInputs(attacker, target, selectedWeapons),
+          outputs
+        };
+
+        historyEntries.unshift(newEntry);
+        historyEntries = historyEntries.slice(0, HISTORY_LIMIT);
+        openHistoryId = newEntry.id;
+        saveHistory();
+        syncCloudEntry(newEntry);
+        renderHistory();
+        closeFloatingMenu();
+        showToast("Armee-Berechnung gespeichert.");
+      }
+
+      function buildArmyWeaponCalculation(attacker, target, weapon) {
+        const attack = parseAttackMode(weapon.attacks_text, weapon.count);
+        const damage = parseDamageMode(weapon.damage_text);
+        const hitTarget = parseSkillTarget(weapon.skill_text);
+        const strength = parseIntegerText(weapon.strength_text);
+        const targetToughness = Number(target.toughness || 0);
+        const ap = parseIntegerText(weapon.ap_text) || 0;
+
+        if (!attack || !damage || !hitTarget || !strength || !targetToughness || !target.save || !target.wounds_per_model) {
+          return { ok: false, weapon };
+        }
+
+        const keywords = (weapon.keywords || []).join(" ").toLowerCase();
+        const data = {
+          attackMode: attack.mode,
+          attackParams: attack.params,
+          hitTarget,
+          woundTarget: woundTargetFromStrength(strength, targetToughness),
+          saveTarget: effectiveSaveTarget(target.save, ap),
+          damageMode: damage.mode,
+          damageParams: damage.params,
+          hitReroll: "none",
+          woundReroll: keywords.includes("twin") || keywords.includes("synchronisiert") ? "failed" : "none",
+          sustained: {
+            enabled: /sustained|trefferhagel/.test(keywords),
+            value: parseKeywordNumber(keywords, /(?:sustained hits|trefferhagel)\s*(\d+)/) || 1,
+            crit: 6
+          },
+          lethal: {
+            enabled: /lethal|tödlich|toedlich/.test(keywords),
+            crit: 6
+          },
+          dev: {
+            enabled: /devastating|verheerende/.test(keywords),
+            crit: 6
+          },
+          fnp: {
+            enabled: ids.fnpEnabled.checked,
+            target: ids.fnpEnabled.checked ? parseBoundedInt(ids.fnpTarget.value, 2, 6) || 5 : null
+          },
+          preDamage: {
+            enabled: false,
+            value: 0
+          },
+          targetProfile: {
+            modelCount: Number(target.model_count || 1),
+            woundsPerModel: Number(target.wounds_per_model || 1)
+          },
+          armyWeaponName: cleanWeaponName(weapon.name)
+        };
+
+        return { ok: true, weapon, data, outputs: calculateAll(data) };
+      }
+
+      function combineArmyWeaponOutputs(weaponDataList, target) {
+        const weaponOutputs = weaponDataList.map(data => ({ data, outputs: calculateAll(data) }));
+        const expected = {
+          hits: sumValues(weaponOutputs, item => item.outputs.expected.hits),
+          wounds: sumValues(weaponOutputs, item => item.outputs.expected.wounds),
+          unsaved: sumValues(weaponOutputs, item => item.outputs.expected.unsaved),
+          damage: sumValues(weaponOutputs, item => item.outputs.expected.damage)
+        };
+
+        const unsaved = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.unsaved), [1]);
+        const killDistributions = weaponOutputs
+          .map(item => item.outputs.killResults?.killDistribution)
+          .filter(Boolean);
+        const killDistribution = killDistributions.length
+          ? capDistribution(killDistributions.reduce((current, distribution) => convolveScalar(current, distribution), [1]), Number(target.model_count || 1))
+          : null;
+
+        const killResults = killDistribution
+          ? {
+              killDistribution,
+              expectedKillOutput: `${formatNumber(expectedValue(killDistribution))} Kills`
+            }
+          : null;
+
+        return {
+          expected,
+          trace: [
+            `Armee-Berechnung mit ${weaponOutputs.length} Waffenprofil${weaponOutputs.length === 1 ? "" : "en"}.`,
+            ...weaponOutputs.map(item => `${item.data.armyWeaponName}: ${formatNumber(item.outputs.expected.damage)} erwarteter Schaden`),
+            `Erwartete Treffer gesamt: ≈ ${formatNumber(expected.hits)}`,
+            `Erwartete Verwundungen gesamt: ≈ ${formatNumber(expected.wounds)}`,
+            `Erwartete unsaved wounds gesamt: ≈ ${formatNumber(expected.unsaved)}`,
+            `Erwarteter Gesamtschaden: ≈ ${formatNumber(expected.damage)}`
+          ],
+          distributions: {
+            unsaved: trimDistribution(unsaved),
+            kills: killDistribution
+          },
+          killResults
+        };
+      }
+
+      function buildArmyHistoryInputs(attacker, target, weapons) {
+        const firstWeapon = weapons[0];
+        const fallback = buildArmyWeaponCalculation(attacker, target, firstWeapon).data;
+        return {
+          ...fallback,
+          armySelection: {
+            attacker: attacker.name,
+            target: target.name,
+            weapons: weapons.map(weapon => `${weapon.count}x ${cleanWeaponName(weapon.name)}`)
+          }
+        };
+      }
+
+      function parseAttackMode(value, count) {
+        const parsed = parseDiceText(value);
+        if (!parsed) return null;
+        if (parsed.sides === null) return { mode: "fix", params: { attackFixed: parsed.count * count } };
+        if (parsed.flat && parsed.diceCount !== 1) return null;
+        if (parsed.sides === 3) return parsed.flat ? { mode: "xw3y", params: { attackX: count, attackY: parsed.flat } } : { mode: "xw3", params: { attackX: parsed.diceCount * count } };
+        if (parsed.sides === 6) return parsed.flat ? { mode: "xw6y", params: { attackX: count, attackY: parsed.flat } } : { mode: "xw6", params: { attackX: parsed.diceCount * count } };
+        return null;
+      }
+
+      function parseDamageMode(value) {
+        const parsed = parseDiceText(value);
+        if (!parsed) return null;
+        if (parsed.sides === null) return { mode: "fix", params: { damageFixed: parsed.count } };
+        if (parsed.diceCount !== 1) return null;
+        if (parsed.sides === 3) return parsed.flat ? { mode: "w3x", params: { damageX: parsed.flat } } : { mode: "w3", params: {} };
+        if (parsed.sides === 6) return parsed.flat ? { mode: "w6x", params: { damageX: parsed.flat } } : { mode: "w6", params: {} };
+        return null;
+      }
+
+      function parseDiceText(value) {
+        const text = String(value || "").toUpperCase().replace(/\s+/g, "");
+        if (/^\d+$/.test(text)) return { sides: null, count: Number(text), diceCount: 0, flat: 0 };
+        const match = text.match(/^(\d*)D([36])(?:\+(\d+))?$/);
+        if (!match) return null;
+        return {
+          sides: Number(match[2]),
+          count: null,
+          diceCount: Number(match[1] || 1),
+          flat: Number(match[3] || 0)
+        };
+      }
+
+      function parseSkillTarget(value) {
+        const text = String(value || "").toUpperCase();
+        if (text.includes("N/A")) return 1;
+        return parseIntegerText(text);
+      }
+
+      function parseIntegerText(value) {
+        const match = String(value || "").match(/-?\d+/);
+        return match ? Number(match[0]) : null;
+      }
+
+      function woundTargetFromStrength(strength, toughness) {
+        if (strength >= toughness * 2) return 2;
+        if (strength > toughness) return 3;
+        if (strength === toughness) return 4;
+        if (strength * 2 <= toughness) return 6;
+        return 5;
+      }
+
+      function effectiveSaveTarget(save, ap) {
+        const target = Number(save) - Number(ap || 0);
+        if (target > 6) return null;
+        return Math.max(2, target);
+      }
+
+      function parseKeywordNumber(text, pattern) {
+        const match = text.match(pattern);
+        return match ? Number(match[1]) : null;
+      }
+
+      function cleanWeaponName(value) {
+        return String(value || "").replace(/^➤\s*/, "");
+      }
+
+      function sumValues(items, fn) {
+        return items.reduce((sum, item) => sum + fn(item), 0);
+      }
+
+      function capDistribution(distribution, maxValue) {
+        const capped = Array(maxValue + 1).fill(0);
+        distribution.forEach((probability, value) => {
+          capped[Math.min(maxValue, value)] += probability || 0;
+        });
+        return trimDistribution(capped);
       }
 
       function loadCloudProfile() {
