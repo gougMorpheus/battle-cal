@@ -828,7 +828,7 @@
       bottom: 12px;
       z-index: 30;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       padding: 10px;
       border-radius: 18px;
@@ -840,6 +840,8 @@
 
     .sticky-bar button {
       min-height: 46px;
+      padding: 0 8px;
+      font-size: 0.9rem;
     }
 
     .floating-history-toggle {
@@ -1178,6 +1180,7 @@
 
   <div class="sticky-bar" aria-label="Schnellaktionen">
     <button type="submit" form="calculatorForm" class="primary">Berechnen</button>
+    <button type="button" id="stickyJumpBtn">Zum Ergebnis</button>
     <button type="button" id="stickyResetBtn">Reset</button>
   </div>
 
@@ -1312,6 +1315,7 @@
         modelCount: document.getElementById("modelCount"),
         woundsPerModel: document.getElementById("woundsPerModel"),
         resetBtn: document.getElementById("resetBtn"),
+        stickyJumpBtn: document.getElementById("stickyJumpBtn"),
         stickyResetBtn: document.getElementById("stickyResetBtn"),
         clearHistoryBtn: document.getElementById("clearHistoryBtn")
       };
@@ -1333,6 +1337,7 @@
       updateSectionSummaries();
       renderHistory();
       updateSyncStatus();
+      updateStickyJumpButton();
       initCloud();
 
       function initSelects() {
@@ -1369,6 +1374,9 @@
         document.addEventListener("keydown", event => {
           if (event.key === "Escape") closeFloatingMenu();
         });
+
+        window.addEventListener("scroll", updateStickyJumpButton, { passive: true });
+        window.addEventListener("resize", updateStickyJumpButton);
 
         ids.attackMode.addEventListener("change", () => {
           renderModeFields("attack");
@@ -1425,6 +1433,10 @@
         ids.stickyResetBtn.addEventListener("click", () => {
           applyBaseProfile();
           clearErrors();
+        });
+
+        ids.stickyJumpBtn.addEventListener("click", () => {
+          jumpBetweenInputAndResult();
         });
 
         ids.historySearch.addEventListener("input", () => {
@@ -1589,6 +1601,40 @@
       function closeFloatingMenu() {
         ids.floatingMenuPanel.classList.add("hidden");
         ids.menuToggleBtn.setAttribute("aria-expanded", "false");
+      }
+
+      function jumpBetweenInputAndResult() {
+        if (isFormInViewport()) {
+          scrollToCurrentResult();
+        } else {
+          scrollToElement(ids.form);
+        }
+      }
+
+      function isFormInViewport() {
+        const rect = ids.form.getBoundingClientRect();
+        return rect.top < window.innerHeight * 0.45 && rect.bottom > window.innerHeight * 0.2;
+      }
+
+      function scrollToCurrentResult() {
+        const currentResult = openHistoryId
+          ? ids.historyContainer.querySelector(`.history-details[data-history-id="${cssEscape(openHistoryId)}"]`)
+          : null;
+        scrollToElement(currentResult || ids.historyContainer);
+      }
+
+      function scrollToElement(element) {
+        if (!element) return;
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function updateStickyJumpButton() {
+        ids.stickyJumpBtn.textContent = isFormInViewport() ? "Zum Ergebnis" : "Zur Eingabe";
+      }
+
+      function cssEscape(value) {
+        if (window.CSS?.escape) return window.CSS.escape(String(value));
+        return String(value).replace(/["\\]/g, "\\$&");
       }
 
       function renderModeFields(kind) {
