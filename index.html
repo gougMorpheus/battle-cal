@@ -3047,11 +3047,17 @@
       }
 
       function buildHistoryTitle(entry, index) {
-        return entry.customTitle?.trim() || buildDefaultHistoryTitle(entry, index);
+        const number = buildHistoryNumber(index);
+        const customTitle = entry.customTitle?.trim();
+        return customTitle ? `${customTitle} ${number}` : buildDefaultHistoryTitle(entry, index);
       }
 
       function buildDefaultHistoryTitle(entry, index) {
-        return `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`}, ${labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams)} #${historyEntries.length - index}`;
+        return `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`}, ${labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams)} ${buildHistoryNumber(index)}`;
+      }
+
+      function buildHistoryNumber(index) {
+        return `#${historyEntries.length - index}`;
       }
 
       function buildRulesSummary(inputs) {
