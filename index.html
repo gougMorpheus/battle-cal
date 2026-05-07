@@ -621,6 +621,8 @@
     .kill-list {
       display: grid;
       gap: 12px;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .results-actions {
@@ -641,24 +643,42 @@
 
     .history-card {
       padding: 16px;
+      min-width: 0;
     }
 
     .history-details {
       display: grid;
       gap: 0;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .history-details summary,
+    .history-head,
+    .history-head > div {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .history-head h3 {
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .history-body {
       display: grid;
       gap: 14px;
       margin-top: 14px;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .history-actions {
       display: flex;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       gap: 8px;
       margin-top: 2px;
+      min-width: 0;
     }
 
     .history-actions button {
@@ -667,14 +687,16 @@
       min-height: 34px;
       padding: 0 10px;
       font-size: 0.84rem;
-      flex: 1 1 0;
-      white-space: nowrap;
+      flex: 1 1 92px;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .stats-grid {
       display: grid;
       gap: 12px;
       grid-template-columns: minmax(0, 1fr);
+      min-width: 0;
     }
 
     .stat {
@@ -683,9 +705,11 @@
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--line);
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
+      min-width: 0;
     }
 
     .stat small {
@@ -698,6 +722,8 @@
       display: inline;
       font-size: 1rem;
       letter-spacing: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .distribution-hint {
@@ -714,6 +740,10 @@
       border-radius: 16px;
       background: rgba(255, 255, 255, 0.02);
       border: 1px solid var(--line);
+      min-width: 0;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .prob-line {
@@ -721,6 +751,8 @@
       align-items: baseline;
       gap: 6px;
       flex-wrap: wrap;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .prob-line strong {
@@ -953,23 +985,6 @@
       font-size: 0.9rem;
     }
 
-    .floating-history-toggle {
-      position: fixed;
-      right: 12px;
-      bottom: 78px;
-      z-index: 29;
-      width: auto;
-      min-width: 0;
-      min-height: 42px;
-      padding: 0 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(11, 15, 20, 0.94);
-      color: var(--text);
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
-      backdrop-filter: blur(14px);
-    }
-
     @media (min-width: 760px) {
       body { padding-bottom: 32px; }
       .container { padding: 20px; }
@@ -978,7 +993,6 @@
       .desktop-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .cloud-profile { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
       .sticky-bar { display: none; }
-      .floating-history-toggle { bottom: 20px; }
       .modal {
         padding: 18px;
         border-radius: 22px;
@@ -1344,8 +1358,6 @@
     <button type="button" id="stickyResetBtn">Reset</button>
   </div>
 
-  <button type="button" id="floatingHistoryToggle" class="floating-history-toggle hidden">Ergebnis schließen</button>
-
   <div id="compareModal" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="compareModalTitle">
       <div class="modal-head">
@@ -1539,7 +1551,6 @@
         armyEditorNewUnitBtn: document.getElementById("armyEditorNewUnitBtn"),
         armyEditorSaveUnitBtn: document.getElementById("armyEditorSaveUnitBtn"),
         armyEditorDeleteUnitBtn: document.getElementById("armyEditorDeleteUnitBtn"),
-        floatingHistoryToggle: document.getElementById("floatingHistoryToggle"),
         exportHistoryBtn: document.getElementById("exportHistoryBtn"),
         importHistoryBtn: document.getElementById("importHistoryBtn"),
         importHistoryFile: document.getElementById("importHistoryFile"),
@@ -1931,12 +1942,6 @@
           const option = event.target.closest("[data-compare-id]");
           if (!option) return;
           toggleCompareSelection(option.getAttribute("data-compare-id"));
-        });
-
-        ids.floatingHistoryToggle.addEventListener("click", () => {
-          if (!openHistoryId) return;
-          openHistoryId = null;
-          renderHistory();
         });
 
         [ids.specialRulesDetails, ids.targetProfileDetails].forEach(detail => {
@@ -3402,14 +3407,12 @@
               <div class="note-box">Keine Ergebnisse für diese Suche.</div>
             </section>
           `;
-          updateFloatingHistoryToggle();
           renderCompareModal();
           return;
         }
 
         ids.historyContainer.innerHTML = visibleEntries.map(entry => renderHistoryCard(entry, historyEntries.findIndex(item => item.id === entry.id))).join("");
         wireHistoryDetails();
-        updateFloatingHistoryToggle();
         renderCompareModal();
       }
 
@@ -3473,13 +3476,8 @@
             } else if (openHistoryId === id) {
               openHistoryId = null;
             }
-            updateFloatingHistoryToggle();
           });
         });
-      }
-
-      function updateFloatingHistoryToggle() {
-        ids.floatingHistoryToggle.classList.toggle("hidden", !openHistoryId);
       }
 
       function renderOutputSections(outputs) {
