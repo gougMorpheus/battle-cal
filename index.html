@@ -376,7 +376,7 @@
     .cloud-profile {
       display: grid;
       gap: 8px;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr);
       align-items: end;
     }
 
@@ -384,6 +384,86 @@
       min-height: 44px;
       padding: 0 12px;
       white-space: nowrap;
+    }
+
+    .floating-menu {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 45;
+      display: grid;
+      justify-items: end;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .menu-toggle {
+      pointer-events: auto;
+      width: 48px;
+      min-width: 48px;
+      min-height: 48px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(11, 15, 20, 0.94);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(14px);
+      font-size: 1.45rem;
+      line-height: 1;
+    }
+
+    .menu-panel {
+      pointer-events: auto;
+      width: min(360px, calc(100vw - 24px));
+      max-height: calc(100vh - 78px);
+      overflow: auto;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(11, 15, 20, 0.96);
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.46);
+      backdrop-filter: blur(16px);
+    }
+
+    .menu-panel.hidden {
+      display: none;
+    }
+
+    .menu-section {
+      display: grid;
+      gap: 10px;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .menu-section:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .menu-section-title {
+      color: var(--text-dim);
+      font-size: 0.76rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .sync-status {
+      display: grid;
+      gap: 4px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .sync-status strong {
+      font-size: 0.94rem;
+    }
+
+    .sync-status small {
+      color: var(--text-soft);
+      line-height: 1.35;
     }
 
     .toast,
@@ -780,6 +860,7 @@
       .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .desktop-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cloud-profile { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
       .sticky-bar { display: none; }
       .floating-history-toggle { bottom: 20px; }
       .modal {
@@ -820,6 +901,51 @@
 <body>
   <div class="container">
     <div id="toast" class="toast"></div>
+
+    <div class="floating-menu">
+      <button type="button" id="menuToggleBtn" class="menu-toggle" aria-expanded="false" aria-controls="floatingMenuPanel" aria-label="Menü öffnen">☰</button>
+      <div id="floatingMenuPanel" class="menu-panel hidden">
+        <div class="menu-section">
+          <div class="menu-section-title">Sync</div>
+          <div class="sync-status" aria-live="polite">
+            <strong id="syncStatusText">Nur lokal</strong>
+            <small id="syncStatusTime">Kein Cloud-Profil aktiv.</small>
+          </div>
+        </div>
+
+        <div class="menu-section">
+          <div class="menu-section-title">Cloud</div>
+          <div class="cloud-profile">
+            <div class="field">
+              <label for="cloudProfileSelect">Cloud-Profil</label>
+              <select id="cloudProfileSelect">
+                <option value="">Nur lokal</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cloudProfileName">Neues Profil</label>
+              <input id="cloudProfileName" type="text" autocomplete="off" placeholder="z. B. Tim" />
+            </div>
+            <button type="button" id="cloudProfileCreateBtn">Anlegen</button>
+          </div>
+        </div>
+
+        <div class="menu-section">
+          <div class="menu-section-title">Historie</div>
+          <div class="standalone-action-group">
+            <button type="button" id="exportHistoryBtn">Exportieren</button>
+            <button type="button" id="importHistoryBtn">Einlesen</button>
+            <button type="button" id="clearHistoryBtn" class="warn">Löschen</button>
+          </div>
+          <input type="file" id="importHistoryFile" accept="application/json,.json" class="hidden" />
+        </div>
+
+        <div class="menu-section">
+          <div class="menu-section-title">Vergleich</div>
+          <button type="button" id="compareOpenBtn">Vergleich öffnen</button>
+        </div>
+      </div>
+    </div>
 
     <header class="hero">
       <h1>40K Battle Calculator</h1>
@@ -1027,33 +1153,10 @@
           </details>
         </section>
 
-        <div class="standalone-action standalone-action-group">
-          <button type="button" id="exportHistoryBtn">Historie exportieren</button>
-          <button type="button" id="importHistoryBtn">Historie einlesen</button>
-          <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
-          <input type="file" id="importHistoryFile" accept="application/json,.json" class="hidden" />
-        </div>
-
-        <div class="standalone-action cloud-profile">
-          <div class="field">
-            <label for="cloudProfileSelect">Cloud-Profil</label>
-            <select id="cloudProfileSelect">
-              <option value="">Nur lokal</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="cloudProfileName">Neues Profil</label>
-            <input id="cloudProfileName" type="text" autocomplete="off" placeholder="z. B. Tim" />
-          </div>
-          <button type="button" id="cloudProfileCreateBtn">Anlegen</button>
-        </div>
       </form>
 
       <section class="results-shell">
         <div id="errorContainer" class="hidden"></div>
-        <div class="results-actions">
-          <button type="button" id="compareOpenBtn">Vergleich öffnen</button>
-        </div>
         <div class="field search-field">
           <label for="historySearch">Ergebnisse durchsuchen</label>
           <input id="historySearch" type="search" autocomplete="off" placeholder="z. B. FNP, 3+, W6, Kills" />
@@ -1108,6 +1211,7 @@
       const HISTORY_KEY = "wh40k-prob-history-v1";
       const UI_STATE_KEY = "wh40k-prob-ui-state-v1";
       const CLOUD_PROFILE_KEY = "wh40k-prob-cloud-profile-v1";
+      const SYNC_STATUS_KEY = "wh40k-prob-sync-status-v1";
       const SUPABASE_URL = "https://rgvpxnmbuyxqplsfonzm.supabase.co";
       const SUPABASE_KEY = "sb_publishable_iUwn_cBLDcPrAaiof1S5hg_FucelzvH";
       const HISTORY_LIMIT = 50;
@@ -1141,6 +1245,10 @@
       const ids = {
         form: document.getElementById("calculatorForm"),
         toast: document.getElementById("toast"),
+        menuToggleBtn: document.getElementById("menuToggleBtn"),
+        floatingMenuPanel: document.getElementById("floatingMenuPanel"),
+        syncStatusText: document.getElementById("syncStatusText"),
+        syncStatusTime: document.getElementById("syncStatusTime"),
         errorContainer: document.getElementById("errorContainer"),
         historyContainer: document.getElementById("historyContainer"),
         historySearch: document.getElementById("historySearch"),
@@ -1201,6 +1309,7 @@
       let compareSelection = [];
       let cloudProfile = loadCloudProfile();
       let cloudProfiles = [];
+      let lastSyncedAt = loadLastSyncedAt();
 
       initSelects();
       renderModeFields("attack");
@@ -1210,6 +1319,7 @@
       restoreAccordionState();
       updateSectionSummaries();
       renderHistory();
+      updateSyncStatus();
       initCloud();
 
       function initSelects() {
@@ -1233,6 +1343,20 @@
       }
 
       function wireUi() {
+        ids.menuToggleBtn.addEventListener("click", () => {
+          toggleFloatingMenu();
+        });
+
+        document.addEventListener("click", event => {
+          if (ids.floatingMenuPanel.classList.contains("hidden")) return;
+          if (event.target.closest(".floating-menu")) return;
+          closeFloatingMenu();
+        });
+
+        document.addEventListener("keydown", event => {
+          if (event.key === "Escape") closeFloatingMenu();
+        });
+
         ids.attackMode.addEventListener("change", () => {
           renderModeFields("attack");
           updateSectionSummaries();
@@ -1302,11 +1426,13 @@
           const selectedId = ids.cloudProfileSelect.value;
           cloudProfile = cloudProfiles.find(profile => profile.id === selectedId) || null;
           saveCloudProfile();
+          updateSyncStatus("loading");
           if (!cloudProfile) {
             historyEntries = loadHistory();
             compareSelection = [];
             openHistoryId = null;
             renderHistory();
+            updateSyncStatus();
             showToast("Lokale Historie aktiv.");
             return;
           }
@@ -1378,6 +1504,7 @@
         });
 
         ids.compareOpenBtn.addEventListener("click", () => {
+          closeFloatingMenu();
           ids.compareModal.classList.add("show");
           ids.compareModal.setAttribute("aria-hidden", "false");
           renderCompareModal();
@@ -1426,6 +1553,17 @@
           await importWholeHistory(file);
           ids.importHistoryFile.value = "";
         });
+      }
+
+      function toggleFloatingMenu() {
+        const nextOpen = ids.floatingMenuPanel.classList.contains("hidden");
+        ids.floatingMenuPanel.classList.toggle("hidden", !nextOpen);
+        ids.menuToggleBtn.setAttribute("aria-expanded", String(nextOpen));
+      }
+
+      function closeFloatingMenu() {
+        ids.floatingMenuPanel.classList.add("hidden");
+        ids.menuToggleBtn.setAttribute("aria-expanded", "false");
       }
 
       function renderModeFields(kind) {
@@ -2919,15 +3057,19 @@
       async function initCloud() {
         renderCloudProfiles();
         if (typeof fetch !== "function") {
+          updateSyncStatus("error", "Cloud-Sync ist in dieser Umgebung nicht verfügbar.");
           showToast("Cloud-Sync ist in dieser Umgebung nicht verfÃ¼gbar.");
           return;
         }
 
         try {
+          updateSyncStatus("loading");
           await loadCloudProfiles();
           renderCloudProfiles();
           if (cloudProfile) await loadCloudHistory();
+          else updateSyncStatus();
         } catch {
+          updateSyncStatus("error", "Cloud-Verbindung nicht bereit.");
           showToast("Cloud-Verbindung nicht bereit. Supabase-Tabelle prÃ¼fen.");
         }
       }
@@ -2958,6 +3100,7 @@
         }
 
         try {
+          updateSyncStatus("loading");
           const [profile] = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,created_at", {
             method: "POST",
             headers: { Prefer: "return=representation" },
@@ -2968,9 +3111,12 @@
           await loadCloudProfiles();
           renderCloudProfiles();
           saveCloudProfile();
+          updateSyncStatus("loading");
           await pushLocalHistoryToCloud();
+          markSynced();
           showToast(`Cloud-Profil ${name} aktiv.`);
         } catch {
+          updateSyncStatus("error", "Profil konnte nicht angelegt werden.");
           showToast("Cloud-Profil konnte nicht angelegt werden.");
         }
       }
@@ -2978,6 +3124,7 @@
       async function loadCloudHistory() {
         if (!cloudProfile) return;
         try {
+          updateSyncStatus("loading");
           const rows = await supabaseRequest(`/rest/v1/battle_results?select=id,created_at,custom_title,inputs,outputs&profile_id=eq.${encodeURIComponent(cloudProfile.id)}&order=created_at.desc&limit=${HISTORY_LIMIT}`);
           historyEntries = rows.map(row => ({
             id: row.id,
@@ -2990,8 +3137,10 @@
           compareSelection = compareSelection.filter(id => historyEntries.some(entry => entry.id === id));
           openHistoryId = historyEntries[0]?.id || null;
           renderHistory();
+          markSynced();
           showToast(`Cloud-Profil ${cloudProfile.name} geladen.`);
         } catch {
+          updateSyncStatus("error", "Cloud-Historie konnte nicht geladen werden.");
           showToast("Cloud-Historie konnte nicht geladen werden.");
         }
       }
@@ -3004,6 +3153,7 @@
       async function syncCloudEntry(entry, options = {}) {
         if (!cloudProfile || typeof fetch !== "function") return;
         try {
+          updateSyncStatus("loading");
           await supabaseRequest("/rest/v1/battle_results", {
             method: "POST",
             headers: { Prefer: "resolution=merge-duplicates" },
@@ -3016,7 +3166,9 @@
               outputs: entry.outputs
             })
           });
+          markSynced();
         } catch {
+          updateSyncStatus("error", "Cloud-Speichern fehlgeschlagen.");
           if (!options.silent) showToast("Cloud-Speichern fehlgeschlagen.");
         }
       }
@@ -3024,10 +3176,13 @@
       async function deleteCloudEntry(id) {
         if (!cloudProfile || typeof fetch !== "function") return;
         try {
+          updateSyncStatus("loading");
           await supabaseRequest(`/rest/v1/battle_results?id=eq.${encodeURIComponent(id)}&profile_id=eq.${encodeURIComponent(cloudProfile.id)}`, {
             method: "DELETE"
           });
+          markSynced();
         } catch {
+          updateSyncStatus("error", "Cloud-Löschen fehlgeschlagen.");
           showToast("Cloud-LÃ¶schen fehlgeschlagen.");
         }
       }
@@ -3035,10 +3190,13 @@
       async function clearCloudHistory() {
         if (!cloudProfile || typeof fetch !== "function") return;
         try {
+          updateSyncStatus("loading");
           await supabaseRequest(`/rest/v1/battle_results?profile_id=eq.${encodeURIComponent(cloudProfile.id)}`, {
             method: "DELETE"
           });
+          markSynced();
         } catch {
+          updateSyncStatus("error", "Cloud-Historie konnte nicht gelöscht werden.");
           showToast("Cloud-Historie konnte nicht gelÃ¶scht werden.");
         }
       }
@@ -3072,6 +3230,52 @@
         try {
           if (cloudProfile) localStorage.setItem(CLOUD_PROFILE_KEY, JSON.stringify(cloudProfile));
           else localStorage.removeItem(CLOUD_PROFILE_KEY);
+        } catch {}
+      }
+
+      function markSynced() {
+        lastSyncedAt = new Date().toISOString();
+        saveLastSyncedAt();
+        updateSyncStatus("synced");
+      }
+
+      function updateSyncStatus(state = "idle", message = "") {
+        if (!cloudProfile) {
+          ids.syncStatusText.textContent = "Nur lokal";
+          ids.syncStatusTime.textContent = "Kein Cloud-Profil aktiv.";
+          return;
+        }
+
+        if (state === "loading") {
+          ids.syncStatusText.textContent = "Sync läuft";
+          ids.syncStatusTime.textContent = `Profil: ${cloudProfile.name}`;
+          return;
+        }
+
+        if (state === "error") {
+          ids.syncStatusText.textContent = "Nicht gesynct";
+          ids.syncStatusTime.textContent = message || "Letzter Cloud-Vorgang fehlgeschlagen.";
+          return;
+        }
+
+        ids.syncStatusText.textContent = "Gesynct";
+        ids.syncStatusTime.textContent = lastSyncedAt
+          ? `Zuletzt: ${formatDate(lastSyncedAt)}`
+          : `Profil: ${cloudProfile.name}, noch kein Sync.`;
+      }
+
+      function loadLastSyncedAt() {
+        try {
+          return localStorage.getItem(SYNC_STATUS_KEY) || "";
+        } catch {
+          return "";
+        }
+      }
+
+      function saveLastSyncedAt() {
+        try {
+          if (lastSyncedAt) localStorage.setItem(SYNC_STATUS_KEY, lastSyncedAt);
+          else localStorage.removeItem(SYNC_STATUS_KEY);
         } catch {}
       }
 
@@ -3135,6 +3339,7 @@
             .slice(0, HISTORY_LIMIT);
 
           saveHistory();
+          await pushLocalHistoryToCloud();
           renderHistory();
           showToast(`${newEntries.length} Eintrag${newEntries.length === 1 ? "" : "e"} importiert.`);
         } catch {
