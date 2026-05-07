@@ -822,6 +822,12 @@
       flex: 0 0 auto;
     }
 
+    .modal > .stack {
+      min-height: 0;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
     .compare-picker {
       display: grid;
       gap: 10px;
@@ -1082,6 +1088,7 @@
 
         <div class="menu-section">
           <div class="menu-section-title">Armeen</div>
+          <button type="button" id="armyCompareOpenBtn">Armeen vergleichen</button>
           <button type="button" id="armyEditorOpenBtn">Einheiten bearbeiten</button>
         </div>
 
@@ -1474,6 +1481,38 @@
     </div>
   </div>
 
+  <div id="armyCompareModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="armyCompareTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="armyCompareTitle">Armeen vergleichen</h2>
+          <div class="muted">Angriffsziele und Bedrohungen nach Fernkampf und Nahkampf berechnen.</div>
+        </div>
+        <button type="button" id="armyCompareCloseBtn" class="modal-close">Schließen</button>
+      </div>
+
+      <div class="stack">
+        <section class="mini-card">
+          <div class="grid two">
+            <div class="field">
+              <label for="armyCompareOwnRoster">Eigene Armee</label>
+              <select id="armyCompareOwnRoster"></select>
+            </div>
+            <div class="field">
+              <label for="armyCompareEnemyRoster">Gegnerische Armee</label>
+              <select id="armyCompareEnemyRoster"></select>
+            </div>
+          </div>
+          <div class="button-row core-actions">
+            <button type="button" id="armyCompareRunBtn" class="primary">Armeen vergleichen</button>
+          </div>
+        </section>
+        <div id="armyCompareStatus" class="note-box">Wähle zwei Armeen und starte den Vergleich.</div>
+        <div id="armyCompareResults" class="list-stack"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     (() => {
       "use strict";
@@ -1534,6 +1573,14 @@
         comparePickerList: document.getElementById("comparePickerList"),
         compareTableContainer: document.getElementById("compareTableContainer"),
         compareSelectionInfo: document.getElementById("compareSelectionInfo"),
+        armyCompareOpenBtn: document.getElementById("armyCompareOpenBtn"),
+        armyCompareModal: document.getElementById("armyCompareModal"),
+        armyCompareCloseBtn: document.getElementById("armyCompareCloseBtn"),
+        armyCompareOwnRoster: document.getElementById("armyCompareOwnRoster"),
+        armyCompareEnemyRoster: document.getElementById("armyCompareEnemyRoster"),
+        armyCompareRunBtn: document.getElementById("armyCompareRunBtn"),
+        armyCompareStatus: document.getElementById("armyCompareStatus"),
+        armyCompareResults: document.getElementById("armyCompareResults"),
         armyEditorOpenBtn: document.getElementById("armyEditorOpenBtn"),
         armyEditorModal: document.getElementById("armyEditorModal"),
         armyEditorCloseBtn: document.getElementById("armyEditorCloseBtn"),
@@ -1890,6 +1937,22 @@
           ids.compareModal.classList.add("show");
           ids.compareModal.setAttribute("aria-hidden", "false");
           renderCompareModal();
+        });
+
+        ids.armyCompareOpenBtn.addEventListener("click", () => {
+          openArmyCompare();
+        });
+
+        ids.armyCompareCloseBtn.addEventListener("click", () => {
+          closeArmyCompare();
+        });
+
+        ids.armyCompareModal.addEventListener("click", event => {
+          if (event.target === ids.armyCompareModal) closeArmyCompare();
+        });
+
+        ids.armyCompareRunBtn.addEventListener("click", async () => {
+          await runArmyCompare();
         });
 
         ids.armyEditorOpenBtn.addEventListener("click", () => {
@@ -2405,6 +2468,7 @@
           trace: buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults),
           distributions: {
             unsaved: totalUnsaved,
+            damage: totalDamage,
             kills: killResults ? killResults.killDistribution : null
           },
           killResults
@@ -2439,6 +2503,7 @@
           trace: buildSingleRerollTrace(data, attackCountDist, finalDamagePerUnsaved, expected, killResults),
           distributions: {
             unsaved: stats.unsaved,
+            damage: stats.damage,
             kills: killResults ? killResults.killDistribution : null
           },
           killResults
@@ -2458,6 +2523,7 @@
         };
 
         const unsaved = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.unsaved), [1]);
+        const damage = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.damage || [1]), [1]);
         const targetProfile = weaponDataList.find(data => data.targetProfile)?.targetProfile || null;
         const preDamage = weaponDataList[0]?.preDamage || { enabled: false, value: 0 };
         const killResults = targetProfile ? buildSequentialKillResults(weaponDataList, targetProfile, preDamage) : null;
@@ -2474,6 +2540,7 @@
           ],
           distributions: {
             unsaved: trimDistribution(unsaved),
+            damage: trimDistribution(damage),
             kills: killResults ? killResults.killDistribution : null
           },
           killResults
@@ -4051,6 +4118,223 @@
         ids.armyEditorModal.setAttribute("aria-hidden", "true");
       }
 
+      async function openArmyCompare() {
+        closeFloatingMenu();
+        ids.armyCompareModal.classList.add("show");
+        ids.armyCompareModal.setAttribute("aria-hidden", "false");
+        ids.armyCompareStatus.textContent = "Armeen werden geladen...";
+        ids.armyCompareResults.innerHTML = "";
+        try {
+          await refreshArmyData();
+          renderArmyRosterSelect(ids.armyCompareOwnRoster);
+          renderArmyRosterSelect(ids.armyCompareEnemyRoster);
+          if (armyRosters[0]) ids.armyCompareOwnRoster.value = armyRosters[0].id;
+          if (armyRosters[1]) ids.armyCompareEnemyRoster.value = armyRosters[1].id;
+          ids.armyCompareStatus.textContent = "Wähle zwei Armeen und starte den Vergleich.";
+        } catch {
+          ids.armyCompareStatus.textContent = "Armeen konnten nicht aus der Cloud geladen werden.";
+        }
+      }
+
+      function closeArmyCompare() {
+        ids.armyCompareModal.classList.remove("show");
+        ids.armyCompareModal.setAttribute("aria-hidden", "true");
+      }
+
+      async function runArmyCompare() {
+        const ownRosterId = ids.armyCompareOwnRoster.value;
+        const enemyRosterId = ids.armyCompareEnemyRoster.value;
+        if (!ownRosterId || !enemyRosterId) {
+          ids.armyCompareStatus.textContent = "Bitte eigene und gegnerische Armee auswählen.";
+          return;
+        }
+
+        ids.armyCompareStatus.textContent = "Berechne alle Paarungen...";
+        ids.armyCompareResults.innerHTML = "";
+        await waitForPaint();
+
+        try {
+          const [ownUnits, enemyUnits] = await Promise.all([
+            loadArmyUnits(ownRosterId),
+            loadArmyUnits(enemyRosterId)
+          ]);
+          const allUnits = [...ownUnits, ...enemyUnits];
+          await Promise.all(allUnits.map(unit => loadArmyWeapons(unit.id)));
+
+          const ownAttacks = analyzeArmyMatchups(ownUnits, enemyUnits);
+          const enemyAttacks = analyzeArmyMatchups(enemyUnits, ownUnits);
+          ids.armyCompareResults.innerHTML = renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks);
+          ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Waffenprofile aus derselben Auswahlgruppe werden als Alternativen behandelt.`;
+        } catch {
+          ids.armyCompareStatus.textContent = "Armee-Vergleich konnte nicht berechnet werden.";
+        }
+      }
+
+      function analyzeArmyMatchups(attackers, defenders) {
+        const results = new Map();
+        attackers.forEach(attacker => {
+          const byMode = { ranged: [], melee: [] };
+          defenders.forEach(defender => {
+            ["ranged", "melee"].forEach(mode => {
+              const result = calculateUnitAttackMode(attacker, defender, mode);
+              if (result) byMode[mode].push(result);
+            });
+          });
+          results.set(attacker.id, byMode);
+        });
+        return results;
+      }
+
+      function calculateUnitAttackMode(attacker, defender, mode) {
+        const weapons = (armyWeaponsByUnit.get(attacker.id) || []).filter(weapon => weaponMatchesAttackMode(weapon, mode));
+        const selectedWeapons = selectBestWeaponOptions(attacker, defender, weapons);
+        if (!selectedWeapons.length) return null;
+
+        const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }));
+        if (weaponEntries.some(entry => !entry.ok)) return null;
+        const outputs = combineWeaponOutputs(weaponEntries.map(entry => entry.data));
+        return {
+          attacker,
+          defender,
+          mode,
+          weapons: selectedWeapons,
+          outputs,
+          expectedDamage: outputs.expected.damage,
+          reliableDamage: reliableDamageAt(outputs.distributions.damage, 0.65),
+          killProbability: defenderDestroyedProbability(outputs, defender)
+        };
+      }
+
+      function weaponMatchesAttackMode(weapon, mode) {
+        const type = String(weapon.weapon_type || "").toLowerCase();
+        const range = String(weapon.range_text || "").toLowerCase();
+        const melee = type.includes("nahkampf") || type.includes("melee") || range.includes("nahkampf") || range.includes("melee");
+        return mode === "melee" ? melee : !melee;
+      }
+
+      function selectBestWeaponOptions(attacker, defender, weapons) {
+        const groups = new Map();
+        weapons.forEach(weapon => {
+          const key = weaponOptionGroupKey(weapon);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(weapon);
+        });
+
+        const selected = [];
+        groups.forEach(groupWeapons => {
+          if (groupWeapons.length === 1) {
+            const entry = buildArmyWeaponCalculation(attacker, defender, groupWeapons[0], { useCurrentFnp: false });
+            if (entry.ok) selected.push(groupWeapons[0]);
+            return;
+          }
+          const ranked = groupWeapons
+            .map(weapon => {
+              const entry = buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false });
+              return { weapon, damage: entry.ok ? entry.outputs.expected.damage : -1 };
+            })
+            .sort((a, b) => b.damage - a.damage);
+          if (ranked[0]?.damage >= 0) selected.push(ranked[0].weapon);
+        });
+        return selected;
+      }
+
+      function weaponOptionGroupKey(weapon) {
+        const parts = String(weapon.id || "").split("::");
+        if (parts.length >= 3) return parts.slice(0, 3).join("::");
+        const name = cleanWeaponName(weapon.name);
+        const normalized = name.includes(" - ") ? name.split(" - ")[0] : name;
+        return `${weapon.weapon_type || ""}|${normalized}`;
+      }
+
+      function reliableDamageAt(distribution, probabilityTarget) {
+        if (!distribution?.length) return 0;
+        let best = 0;
+        for (let damage = 0; damage < distribution.length; damage += 1) {
+          if (tailProbability(distribution, damage) + EPSILON >= probabilityTarget) best = damage;
+        }
+        return best;
+      }
+
+      function defenderDestroyedProbability(outputs, defender) {
+        const modelCount = Number(defender.model_count || 1);
+        const killDistribution = outputs.killResults?.killDistribution;
+        return killDistribution ? tailProbability(killDistribution, modelCount) : 0;
+      }
+
+      function renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks) {
+        if (!ownUnits.length) return `<div class="note-box">Keine eigenen Einheiten gefunden.</div>`;
+        return ownUnits.map(unit => {
+          const outgoing = ownAttacks.get(unit.id) || { ranged: [], melee: [] };
+          const incomingAll = collectIncomingThreats(unit, enemyAttacks);
+          return `
+            <section class="mini-card">
+              <div class="card-title">
+                <h3>${escapeHtml(unit.name)}</h3>
+                <span class="muted">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
+              </div>
+              <div class="grid two">
+                ${renderArmyCompareMode("Beste Ziele Fernkampf", outgoing.ranged, "target")}
+                ${renderArmyCompareMode("Beste Ziele Nahkampf", outgoing.melee, "target")}
+              </div>
+              <div class="grid two">
+                ${renderArmyCompareMode("Vorsicht vor Fernkampf", incomingAll.ranged, "threat")}
+                ${renderArmyCompareMode("Vorsicht vor Nahkampf", incomingAll.melee, "threat")}
+              </div>
+            </section>
+          `;
+        }).join("");
+      }
+
+      function collectIncomingThreats(unit, enemyAttacks) {
+        const incoming = { ranged: [], melee: [] };
+        enemyAttacks.forEach(byMode => {
+          ["ranged", "melee"].forEach(mode => {
+            byMode[mode]
+              .filter(result => result.defender.id === unit.id)
+              .forEach(result => incoming[mode].push(result));
+          });
+        });
+        return incoming;
+      }
+
+      function renderArmyCompareMode(title, results, perspective) {
+        const sorted = results.slice().sort((a, b) =>
+          b.killProbability - a.killProbability ||
+          b.reliableDamage - a.reliableDamage ||
+          b.expectedDamage - a.expectedDamage
+        );
+        return `
+          <div class="mini-card">
+            <div class="card-title">
+              <h3>${escapeHtml(title)}</h3>
+            </div>
+            <div class="list-stack">
+              ${sorted.length ? sorted.map(result => renderArmyCompareRow(result, perspective)).join("") : `<div class="list-row"><span>Keine berechenbaren Waffen.</span></div>`}
+            </div>
+          </div>
+        `;
+      }
+
+      function renderArmyCompareRow(result, perspective) {
+        const unit = perspective === "target" ? result.defender : result.attacker;
+        const weapons = result.weapons.map(weapon => `${weapon.count}x ${cleanWeaponName(weapon.name)}`).join(", ");
+        return `
+          <div class="list-row">
+            <span>
+              <strong>${escapeHtml(unit.name)}</strong><br />
+              65%-Schaden: <strong>${escapeHtml(result.reliableDamage)}</strong>,
+              Erwartung: <strong>${escapeHtml(formatNumber(result.expectedDamage))}</strong>,
+              Zerstörung: <strong>${escapeHtml(formatPercent(result.killProbability))}</strong><br />
+              <small>${escapeHtml(weapons)}</small>
+            </span>
+          </div>
+        `;
+      }
+
+      function waitForPaint() {
+        return new Promise(resolve => requestAnimationFrame(() => resolve()));
+      }
+
       async function refreshArmyEditor() {
         if (typeof fetch !== "function") {
           showToast("Cloud-Datenbank ist in dieser Umgebung nicht verfügbar.");
@@ -4330,7 +4614,7 @@
         showToast("Armee-Berechnung gespeichert.");
       }
 
-      function buildArmyWeaponCalculation(attacker, target, weapon) {
+      function buildArmyWeaponCalculation(attacker, target, weapon, options = {}) {
         const attack = parseAttackMode(weapon.attacks_text, weapon.count);
         const damage = parseDamageMode(weapon.damage_text);
         const hitTarget = parseSkillTarget(weapon.skill_text);
@@ -4367,8 +4651,8 @@
             crit: 6
           },
           fnp: {
-            enabled: ids.fnpEnabled.checked,
-            target: ids.fnpEnabled.checked ? parseBoundedInt(ids.fnpTarget.value, 2, 6) || 5 : null
+            enabled: options.useCurrentFnp === false ? false : ids.fnpEnabled.checked,
+            target: options.useCurrentFnp === false ? null : ids.fnpEnabled.checked ? parseBoundedInt(ids.fnpTarget.value, 2, 6) || 5 : null
           },
           preDamage: {
             enabled: false,
