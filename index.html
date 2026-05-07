@@ -558,6 +558,28 @@
       color: var(--text-soft);
     }
 
+    .manual-weapon-tools {
+      display: grid;
+      gap: 10px;
+      padding-top: 4px;
+    }
+
+    .manual-weapon-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .manual-weapon-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
     .toast,
     .note-box,
     .error-box {
@@ -1112,6 +1134,11 @@
             </div>
 
             <div id="damageFields" class="grid two"></div>
+
+            <div class="manual-weapon-tools">
+              <button type="button" id="addManualWeaponBtn" class="ghost">Aktuelle Waffe hinzufügen</button>
+              <div id="manualWeaponList" class="manual-weapon-list"></div>
+            </div>
           </div>
 
           <div class="button-row core-actions desktop-actions">
@@ -1420,6 +1447,8 @@
         armyTargetRoster: document.getElementById("armyTargetRoster"),
         armyTargetUnit: document.getElementById("armyTargetUnit"),
         armyCalculateBtn: document.getElementById("armyCalculateBtn"),
+        addManualWeaponBtn: document.getElementById("addManualWeaponBtn"),
+        manualWeaponList: document.getElementById("manualWeaponList"),
         attackMode: document.getElementById("attackMode"),
         attackFields: document.getElementById("attackFields"),
         hitTarget: document.getElementById("hitTarget"),
@@ -1468,6 +1497,7 @@
       let armyRosters = [];
       let armyUnitsByRoster = new Map();
       let armyWeaponsByUnit = new Map();
+      let manualWeaponInputs = [];
 
       initSelects();
       renderModeFields("attack");
@@ -1579,14 +1609,28 @@
           calculateAndStore();
         });
 
+        ids.addManualWeaponBtn.addEventListener("click", () => {
+          addCurrentManualWeapon();
+        });
+
+        ids.manualWeaponList.addEventListener("click", event => {
+          const button = event.target.closest("button[data-remove-manual-weapon]");
+          if (!button) return;
+          const index = Number(button.getAttribute("data-remove-manual-weapon"));
+          manualWeaponInputs.splice(index, 1);
+          renderManualWeaponList();
+        });
+
         ids.resetBtn.addEventListener("click", () => {
           editingHistoryId = null;
+          manualWeaponInputs = [];
           applyBaseProfile();
           clearErrors();
         });
 
         ids.stickyResetBtn.addEventListener("click", () => {
           editingHistoryId = null;
+          manualWeaponInputs = [];
           applyBaseProfile();
           clearErrors();
         });
@@ -1885,47 +1929,53 @@
 
         ids.modelCount.value = "";
         ids.woundsPerModel.value = "";
+        manualWeaponInputs = [];
+        renderManualWeaponList();
         updateSectionSummaries();
       }
 
       function loadInputsIntoForm(inputs) {
-        ids.attackMode.value = inputs.attackMode;
+        const weaponInputs = Array.isArray(inputs.weapons) && inputs.weapons.length ? inputs.weapons : null;
+        const formInputs = weaponInputs ? weaponInputs[weaponInputs.length - 1] : inputs;
+        manualWeaponInputs = weaponInputs ? weaponInputs.slice(0, -1).map(cloneInputData) : [];
+
+        ids.attackMode.value = formInputs.attackMode;
         renderModeFields("attack");
-        Object.entries(inputs.attackParams).forEach(([id, value]) => {
+        Object.entries(formInputs.attackParams).forEach(([id, value]) => {
           const field = document.getElementById(id);
           if (field) field.value = String(value);
         });
 
-        ids.hitTarget.value = String(inputs.hitTarget);
-        ids.woundTarget.value = String(inputs.woundTarget);
-        ids.saveTarget.value = inputs.saveTarget === null ? "" : String(inputs.saveTarget);
+        ids.hitTarget.value = String(formInputs.hitTarget);
+        ids.woundTarget.value = String(formInputs.woundTarget);
+        ids.saveTarget.value = formInputs.saveTarget === null ? "" : String(formInputs.saveTarget);
 
-        ids.damageMode.value = inputs.damageMode;
+        ids.damageMode.value = formInputs.damageMode;
         renderModeFields("damage");
-        Object.entries(inputs.damageParams).forEach(([id, value]) => {
+        Object.entries(formInputs.damageParams).forEach(([id, value]) => {
           const field = document.getElementById(id);
           if (field) field.value = String(value);
         });
 
-        ids.sustainedEnabled.checked = inputs.sustained.enabled;
-        ids.sustainedFields.classList.toggle("hidden", !inputs.sustained.enabled);
-        ids.sustainedValue.value = String(inputs.sustained.value);
-        ids.sustainedCrit.value = String(inputs.sustained.crit);
+        ids.sustainedEnabled.checked = formInputs.sustained.enabled;
+        ids.sustainedFields.classList.toggle("hidden", !formInputs.sustained.enabled);
+        ids.sustainedValue.value = String(formInputs.sustained.value);
+        ids.sustainedCrit.value = String(formInputs.sustained.crit);
 
-        ids.lethalEnabled.checked = inputs.lethal.enabled;
-        ids.lethalFields.classList.toggle("hidden", !inputs.lethal.enabled);
-        ids.lethalCrit.value = String(inputs.lethal.crit);
+        ids.lethalEnabled.checked = formInputs.lethal.enabled;
+        ids.lethalFields.classList.toggle("hidden", !formInputs.lethal.enabled);
+        ids.lethalCrit.value = String(formInputs.lethal.crit);
 
-        ids.hitReroll.value = inputs.hitReroll;
-        ids.woundReroll.value = inputs.woundReroll;
+        ids.hitReroll.value = formInputs.hitReroll;
+        ids.woundReroll.value = formInputs.woundReroll;
 
-        ids.devEnabled.checked = inputs.dev.enabled;
-        ids.devFields.classList.toggle("hidden", !inputs.dev.enabled);
-        ids.devCrit.value = String(inputs.dev.crit);
+        ids.devEnabled.checked = formInputs.dev.enabled;
+        ids.devFields.classList.toggle("hidden", !formInputs.dev.enabled);
+        ids.devCrit.value = String(formInputs.dev.crit);
 
-        ids.fnpEnabled.checked = inputs.fnp.enabled;
-        ids.fnpFields.classList.toggle("hidden", !inputs.fnp.enabled);
-        ids.fnpTarget.value = String(inputs.fnp.target ?? 5);
+        ids.fnpEnabled.checked = formInputs.fnp.enabled;
+        ids.fnpFields.classList.toggle("hidden", !formInputs.fnp.enabled);
+        ids.fnpTarget.value = String(formInputs.fnp.target ?? 5);
 
         ids.preDamageEnabled.checked = Boolean(inputs.preDamage?.enabled);
         ids.preDamageFields.classList.toggle("hidden", !inputs.preDamage?.enabled);
@@ -1933,6 +1983,7 @@
 
         ids.modelCount.value = inputs.targetProfile ? String(inputs.targetProfile.modelCount) : "";
         ids.woundsPerModel.value = inputs.targetProfile ? String(inputs.targetProfile.woundsPerModel) : "";
+        renderManualWeaponList();
         updateSectionSummaries();
       }
 
@@ -1957,14 +2008,16 @@
         }
 
         clearErrors();
-        const outputs = calculateAll(parsed.data);
+        const weaponInputs = buildManualWeaponSequence(parsed.data);
+        const inputs = weaponInputs.length > 1 ? buildMultiWeaponHistoryInputs(weaponInputs, "Manuelle Mehrwaffen-Berechnung") : parsed.data;
+        const outputs = weaponInputs.length > 1 ? combineWeaponOutputs(weaponInputs) : calculateAll(parsed.data);
         const editingEntry = editingHistoryId
           ? historyEntries.find(entry => entry.id === editingHistoryId)
           : null;
         if (editingHistoryId && !editingEntry) editingHistoryId = null;
 
         if (editingEntry) {
-          editingEntry.inputs = parsed.data;
+          editingEntry.inputs = inputs;
           editingEntry.outputs = outputs;
           openHistoryId = editingEntry.id;
           editingHistoryId = null;
@@ -1979,7 +2032,7 @@
           id: createId(),
           createdAt: new Date().toISOString(),
           customTitle: "",
-          inputs: parsed.data,
+          inputs,
           outputs
         };
         historyEntries.unshift(newEntry);
@@ -2088,6 +2141,67 @@
         return output;
       }
 
+      function addCurrentManualWeapon() {
+        const parsed = parseAndValidateInputs();
+        if (!parsed.ok) {
+          renderErrors(parsed.errors);
+          return;
+        }
+        clearErrors();
+        manualWeaponInputs.push(cloneInputData(parsed.data));
+        renderManualWeaponList();
+        showToast("Waffe zur Berechnung hinzugefügt.");
+      }
+
+      function renderManualWeaponList() {
+        if (!ids.manualWeaponList) return;
+        ids.manualWeaponList.innerHTML = manualWeaponInputs.length
+          ? manualWeaponInputs.map((weapon, index) => `
+              <div class="manual-weapon-row">
+                <span>${escapeHtml(`Waffe ${index + 1}: ${labelWeaponInput(weapon)}`)}</span>
+                <button type="button" class="ghost" data-remove-manual-weapon="${index}">Entfernen</button>
+              </div>
+            `).join("")
+          : `<div class="muted">Keine zusätzliche Waffe hinzugefügt. Das Formular zählt als aktuelle Waffe.</div>`;
+      }
+
+      function labelWeaponInput(input) {
+        return `${labelAttackMode(input.attackMode, input.attackParams)}, ${input.hitTarget}+, ${input.woundTarget}+, ${input.saveTarget === null ? "Kein Save" : `${input.saveTarget}+`}, ${labelDamageMode(input.damageMode, input.damageParams)}`;
+      }
+
+      function cloneInputData(input) {
+        return JSON.parse(JSON.stringify(input));
+      }
+
+      function buildManualWeaponSequence(currentInput) {
+        const targetProfile = currentInput.targetProfile ? { ...currentInput.targetProfile } : null;
+        const preDamage = { enabled: Boolean(currentInput.preDamage?.enabled), value: Number(currentInput.preDamage?.value || 0) };
+        return [...manualWeaponInputs.map(cloneInputData), cloneInputData(currentInput)].map((weapon, index) => ({
+          ...weapon,
+          targetProfile,
+          preDamage: index === 0 ? preDamage : { enabled: false, value: 0 },
+          armyWeaponName: weapon.armyWeaponName || `Waffe ${index + 1}`
+        }));
+      }
+
+      function buildMultiWeaponHistoryInputs(weapons, title) {
+        const first = weapons[0];
+        return {
+          ...cloneInputData(first),
+          preDamage: cloneInputData(first.preDamage),
+          targetProfile: first.targetProfile ? { ...first.targetProfile } : null,
+          weapons: weapons.map((weapon, index) => ({
+            ...cloneInputData(weapon),
+            armyWeaponName: weapon.armyWeaponName || `Waffe ${index + 1}`
+          })),
+          armySelection: {
+            attacker: title,
+            target: first.targetProfile ? `${first.targetProfile.modelCount} Modelle` : "kein Zielprofil",
+            weapons: weapons.map((weapon, index) => weapon.armyWeaponName || `Waffe ${index + 1}: ${labelWeaponInput(weapon)}`)
+          }
+        };
+      }
+
       function calculateAll(data) {
         if (usesSingleReroll(data)) return calculateAllWithSingleRerolls(data);
 
@@ -2180,6 +2294,153 @@
           },
           killResults
         };
+      }
+
+      function combineWeaponOutputs(weaponDataList) {
+        const weaponOutputs = weaponDataList.map((data, index) => ({
+          data: { ...data, armyWeaponName: data.armyWeaponName || `Waffe ${index + 1}` },
+          outputs: calculateAll(data)
+        }));
+        const expected = {
+          hits: sumValues(weaponOutputs, item => item.outputs.expected.hits),
+          wounds: sumValues(weaponOutputs, item => item.outputs.expected.wounds),
+          unsaved: sumValues(weaponOutputs, item => item.outputs.expected.unsaved),
+          damage: sumValues(weaponOutputs, item => item.outputs.expected.damage)
+        };
+
+        const unsaved = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.unsaved), [1]);
+        const targetProfile = weaponDataList.find(data => data.targetProfile)?.targetProfile || null;
+        const preDamage = weaponDataList[0]?.preDamage || { enabled: false, value: 0 };
+        const killResults = targetProfile ? buildSequentialKillResults(weaponDataList, targetProfile, preDamage) : null;
+
+        return {
+          expected,
+          trace: [
+            `Berechnung mit ${weaponOutputs.length} Waffenprofil${weaponOutputs.length === 1 ? "" : "en"} in Reihenfolge.`,
+            ...weaponOutputs.map((item, index) => `${item.data.armyWeaponName || `Waffe ${index + 1}`}: ${formatNumber(item.outputs.expected.damage)} erwarteter Schaden`),
+            `Erwartete Treffer gesamt: ≈ ${formatNumber(expected.hits)}`,
+            `Erwartete Verwundungen gesamt: ≈ ${formatNumber(expected.wounds)}`,
+            `Erwartete unsaved wounds gesamt: ≈ ${formatNumber(expected.unsaved)}`,
+            `Erwarteter Gesamtschaden: ≈ ${formatNumber(expected.damage)}`
+          ],
+          distributions: {
+            unsaved: trimDistribution(unsaved),
+            kills: killResults ? killResults.killDistribution : null
+          },
+          killResults
+        };
+      }
+
+      function buildSequentialKillResults(weaponDataList, targetProfile, preDamage) {
+        const { modelCount, woundsPerModel } = targetProfile;
+        const stateSize = (modelCount + 1) * woundsPerModel;
+        let stateDist = Array(stateSize).fill(0);
+        const initialState = computePreDamageState(targetProfile, preDamage);
+        stateDist[stateIndex(initialState.kills, initialState.remainder, woundsPerModel)] = 1;
+
+        weaponDataList.forEach(data => {
+          stateDist = buildKillStateDistForWeapon({ ...data, targetProfile, preDamage: { enabled: false, value: 0 } }, stateDist);
+        });
+
+        const killDistribution = Array(modelCount + 1).fill(0);
+        let expectedEffectiveDamage = 0;
+        for (let kills = 0; kills <= modelCount; kills += 1) {
+          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
+            const probability = stateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+            if (probability < EPSILON) continue;
+            killDistribution[kills] += probability;
+            expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+          }
+        }
+
+        return {
+          killDistribution: trimDistribution(killDistribution),
+          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
+        };
+      }
+
+      function buildKillStateDistForWeapon(data, initialStateDist) {
+        if (usesSingleReroll(data)) return buildSingleRerollKillStateDistForWeapon(data, initialStateDist);
+
+        const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
+        const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
+        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
+        const hitBranches = buildHitBranchProbabilities(data);
+        const woundOutcome = buildWoundOutcomeProbabilities(data);
+        const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
+        const saveSuccessProbability = 1 - saveFailProbability;
+        const normalDamageDist = buildDamagePerWoundAttemptDistribution(
+          woundOutcome.fail,
+          woundOutcome.normal,
+          woundOutcome.dev,
+          saveSuccessProbability,
+          saveFailProbability,
+          finalDamagePerUnsaved
+        );
+        const autoDamageDist = buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved);
+        const { modelCount, woundsPerModel } = data.targetProfile;
+        const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
+        const branchSpecs = [
+          { weight: hitBranches.miss, normalHits: 0, autoWounds: 0 },
+          { weight: hitBranches.normal, normalHits: 1, autoWounds: 0 },
+          { weight: hitBranches.sustainedOnly, normalHits: 1 + data.sustained.value, autoWounds: 0 },
+          { weight: hitBranches.lethalOnly, normalHits: 0, autoWounds: 1 },
+          { weight: hitBranches.both, normalHits: data.sustained.value, autoWounds: 1 }
+        ].filter(branch => branch.weight > EPSILON);
+        const branchTransitions = branchSpecs.map(branch => ({
+          weight: branch.weight,
+          byRemainder: buildBranchTransitionByRemainder(branch.normalHits, branch.autoWounds, normalDamageDist, autoDamageDist, woundsPerModel)
+        }));
+
+        let totalStateDist = Array(initialStateDist.length).fill(0);
+        let currentStateDist = initialStateDist.slice();
+        for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
+          const probability = attackCountDist[attacks] || 0;
+          if (probability > EPSILON) {
+            for (let i = 0; i < totalStateDist.length; i += 1) totalStateDist[i] += currentStateDist[i] * probability;
+          }
+          if (attacks < attackCountDist.length - 1) {
+            currentStateDist = applySingleAttackToStateDist(currentStateDist, branchTransitions, modelCount, woundsPerModel, absorbIndex);
+          }
+        }
+        return totalStateDist;
+      }
+
+      function buildSingleRerollKillStateDistForWeapon(data, initialStateDist) {
+        const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
+        const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
+        const damageDist = applyFnpToDamage(rawDamageDist, data.fnp);
+        const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
+        const saveSuccessProbability = 1 - saveFailProbability;
+        const { modelCount, woundsPerModel } = data.targetProfile;
+        let current = new Map();
+
+        for (let kills = 0; kills <= modelCount; kills += 1) {
+          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
+            const probability = initialStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+            if (probability > EPSILON) {
+              addMapProbability(current, killStateKey(kills, remainder, initialHitRerollToken(data), initialWoundRerollToken(data)), probability);
+            }
+          }
+        }
+
+        let total = new Map();
+        for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
+          const attackProbability = attackCountDist[attacks] || 0;
+          if (attackProbability > EPSILON) {
+            current.forEach((probability, key) => addMapProbability(total, key, probability * attackProbability));
+          }
+          if (attacks < attackCountDist.length - 1) {
+            current = applySingleAttackToKillStates(current, data, saveSuccessProbability, saveFailProbability, damageDist);
+          }
+        }
+
+        const output = Array(initialStateDist.length).fill(0);
+        total.forEach((probability, key) => {
+          const state = parseKillStateKey(key);
+          output[stateIndex(state.kills, state.remainder, woundsPerModel)] += probability;
+        });
+        return output;
       }
 
       function buildSingleRerollTrace(data, attackCountDist, finalDamagePerUnsaved, expected, killResults) {
@@ -2958,10 +3219,12 @@
         const index = historyEntries.findIndex(item => item.id === entry.id);
         const inputs = entry.inputs;
         const outputs = entry.outputs;
+        const weapons = Array.isArray(inputs.weapons) ? inputs.weapons : [];
         const parts = [
           buildHistoryTitle(entry, index),
           formatDate(entry.createdAt),
           labelAttackMode(inputs.attackMode, inputs.attackParams),
+          ...weapons.map(labelWeaponInput),
           `${inputs.hitTarget}+`,
           `${inputs.woundTarget}+`,
           inputs.saveTarget === null ? "Kein Save" : `${inputs.saveTarget}+`,
@@ -3204,7 +3467,8 @@
 
         const rows = [];
         rows.push(compareSectionRow("Eingaben", entries.length));
-        rows.push(compareValueRow("Attacken", entries.map(entry => labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams))));
+        rows.push(compareValueRow("Waffen", entries.map(entry => Array.isArray(entry.inputs.weapons) ? `${entry.inputs.weapons.length}` : "1")));
+        rows.push(compareValueRow("Attacken", entries.map(entry => Array.isArray(entry.inputs.weapons) ? entry.inputs.weapons.map(labelWeaponInput).join(" | ") : labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams))));
         rows.push(compareValueRow("Trefferwert", entries.map(entry => `${entry.inputs.hitTarget}+`)));
         rows.push(compareValueRow("Verwundungswert", entries.map(entry => `${entry.inputs.woundTarget}+`)));
         rows.push(compareValueRow("Save", entries.map(entry => entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`)));
@@ -3281,6 +3545,13 @@
       }
 
       function buildDefaultHistoryTitle(entry, index) {
+        if (Array.isArray(entry.inputs.weapons) && entry.inputs.weapons.length > 1) {
+          const selection = entry.inputs.armySelection;
+          const prefix = selection?.attacker && selection?.target
+            ? `${selection.attacker} → ${selection.target}`
+            : `${entry.inputs.weapons.length} Waffen`;
+          return `${prefix} ${buildHistoryNumber(index)}`;
+        }
         return `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`}, ${labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams)} ${buildHistoryNumber(index)}`;
       }
 
@@ -3305,6 +3576,21 @@
       }
 
       function renderInputsSummary(inputs) {
+        if (Array.isArray(inputs.weapons) && inputs.weapons.length > 1) {
+          const header = inputs.armySelection
+            ? [
+                `Angreifer: ${inputs.armySelection.attacker}`,
+                `Ziel: ${inputs.armySelection.target}`
+              ]
+            : [];
+          const weaponItems = inputs.weapons.map((weapon, index) => `Waffe ${index + 1}: ${weapon.armyWeaponName || labelWeaponInput(weapon)}`);
+          const shared = [
+            `Feel No Pain: ${inputs.fnp.enabled ? inputs.fnp.target + "+" : "aus"}`,
+            `Vorschädigung: ${inputs.preDamage?.enabled ? `${inputs.preDamage.value} Schaden` : "aus"}`,
+            `Zielprofil: ${inputs.targetProfile ? `${inputs.targetProfile.modelCount} Modelle, ${inputs.targetProfile.woundsPerModel} LP` : "aus"}`
+          ];
+          return [...header, ...weaponItems, ...shared].map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
+        }
         const items = [
           `Attackenmodus: ${labelAttackMode(inputs.attackMode, inputs.attackParams)}`,
           `Trefferwert: ${inputs.hitTarget}+`,
@@ -3701,12 +3987,13 @@
           return;
         }
 
-        const outputs = combineArmyWeaponOutputs(weaponEntries.map(entry => entry.data), target);
+        const weaponDataList = weaponEntries.map(entry => entry.data);
+        const outputs = combineWeaponOutputs(weaponDataList);
         const newEntry = {
           id: createId(),
           createdAt: new Date().toISOString(),
           customTitle: `${attacker.name} → ${target.name}`,
-          inputs: buildArmyHistoryInputs(attacker, target, selectedWeapons),
+          inputs: buildArmyHistoryInputs(attacker, target, selectedWeapons, weaponDataList),
           outputs
         };
 
@@ -3774,53 +4061,12 @@
         return { ok: true, weapon, data, outputs: calculateAll(data) };
       }
 
-      function combineArmyWeaponOutputs(weaponDataList, target) {
-        const weaponOutputs = weaponDataList.map(data => ({ data, outputs: calculateAll(data) }));
-        const expected = {
-          hits: sumValues(weaponOutputs, item => item.outputs.expected.hits),
-          wounds: sumValues(weaponOutputs, item => item.outputs.expected.wounds),
-          unsaved: sumValues(weaponOutputs, item => item.outputs.expected.unsaved),
-          damage: sumValues(weaponOutputs, item => item.outputs.expected.damage)
-        };
-
-        const unsaved = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.unsaved), [1]);
-        const killDistributions = weaponOutputs
-          .map(item => item.outputs.killResults?.killDistribution)
-          .filter(Boolean);
-        const killDistribution = killDistributions.length
-          ? capDistribution(killDistributions.reduce((current, distribution) => convolveScalar(current, distribution), [1]), Number(target.model_count || 1))
-          : null;
-
-        const killResults = killDistribution
-          ? {
-              killDistribution,
-              expectedKillOutput: `${formatNumber(expectedValue(killDistribution))} Kills`
-            }
-          : null;
-
-        return {
-          expected,
-          trace: [
-            `Armee-Berechnung mit ${weaponOutputs.length} Waffenprofil${weaponOutputs.length === 1 ? "" : "en"}.`,
-            ...weaponOutputs.map(item => `${item.data.armyWeaponName}: ${formatNumber(item.outputs.expected.damage)} erwarteter Schaden`),
-            `Erwartete Treffer gesamt: ≈ ${formatNumber(expected.hits)}`,
-            `Erwartete Verwundungen gesamt: ≈ ${formatNumber(expected.wounds)}`,
-            `Erwartete unsaved wounds gesamt: ≈ ${formatNumber(expected.unsaved)}`,
-            `Erwarteter Gesamtschaden: ≈ ${formatNumber(expected.damage)}`
-          ],
-          distributions: {
-            unsaved: trimDistribution(unsaved),
-            kills: killDistribution
-          },
-          killResults
-        };
-      }
-
-      function buildArmyHistoryInputs(attacker, target, weapons) {
+      function buildArmyHistoryInputs(attacker, target, weapons, weaponDataList) {
         const firstWeapon = weapons[0];
         const fallback = buildArmyWeaponCalculation(attacker, target, firstWeapon).data;
         return {
           ...fallback,
+          weapons: weaponDataList.map(cloneInputData),
           armySelection: {
             attacker: attacker.name,
             target: target.name,
@@ -4239,53 +4485,6 @@
           case "w6x": return `W6 + ${params.damageX}`;
           default: return mode;
         }
-      }
-
-      function renderHistoryCard(entry, index) {
-        const title = buildHistoryTitle(entry, index);
-        return `
-          <article class="card history-card">
-            <details class="history-details" data-history-id="${entry.id}" ${openHistoryId === entry.id ? "open" : ""}>
-              <summary>
-                <div class="history-head">
-                  <div>
-                    <h3>${escapeHtml(title)}</h3>
-                    <div class="muted">${formatDate(entry.createdAt)}</div>
-                  </div>
-                  <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
-                </div>
-              </summary>
-
-              <div class="history-body">
-                <div class="history-actions">
-                  <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
-                  <button type="button" class="ghost" data-action="edit" data-id="${entry.id}">${editingHistoryId === entry.id ? "Wird bearbeitet" : "Bearbeiten"}</button>
-                  <button type="button" class="ghost" data-action="rename" data-id="${entry.id}">Name</button>
-                  <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
-                  <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
-                </div>
-
-                <details class="section-details">
-                  <summary>
-                    <div class="meta-row">
-                      <span class="pill"><span class="summary-arrow">▶</span>Eingaben</span>
-                    </div>
-                  </summary>
-                  <div class="section-details-body">
-                    <div class="list-stack">
-                      ${renderInputsSummary(entry.inputs)}
-                    </div>
-                  </div>
-                </details>
-
-                <div class="stack">
-                  ${renderOutputSections(entry.outputs)}
-                  ${entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : ""}
-                </div>
-              </div>
-            </details>
-          </article>
-        `;
       }
 
       function csvQuote(value) {
