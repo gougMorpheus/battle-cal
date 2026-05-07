@@ -4164,7 +4164,7 @@
           const ownAttacks = analyzeArmyMatchups(ownUnits, enemyUnits);
           const enemyAttacks = analyzeArmyMatchups(enemyUnits, ownUnits);
           ids.armyCompareResults.innerHTML = renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks);
-          ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Waffenprofile aus derselben Auswahlgruppe werden als Alternativen behandelt.`;
+          ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden je Kategorie die TOP3 nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
         } catch {
           ids.armyCompareStatus.textContent = "Armee-Vergleich konnte nicht berechnet werden.";
         }
@@ -4201,6 +4201,7 @@
           outputs,
           expectedDamage: outputs.expected.damage,
           reliableDamage: reliableDamageAt(outputs.distributions.damage, 0.65),
+          reliableDamageRatio: reliableDamageRatio(outputs.distributions.damage, defender),
           killProbability: defenderDestroyedProbability(outputs, defender)
         };
       }
@@ -4255,6 +4256,15 @@
         return best;
       }
 
+      function reliableDamageRatio(distribution, defender) {
+        const totalWounds = unitTotalWounds(defender);
+        return totalWounds > 0 ? reliableDamageAt(distribution, 0.65) / totalWounds : 0;
+      }
+
+      function unitTotalWounds(unit) {
+        return Number(unit.model_count || 1) * Number(unit.wounds_per_model || 1);
+      }
+
       function defenderDestroyedProbability(outputs, defender) {
         const modelCount = Number(defender.model_count || 1);
         const killDistribution = outputs.killResults?.killDistribution;
@@ -4263,23 +4273,29 @@
 
       function renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks) {
         if (!ownUnits.length) return `<div class="note-box">Keine eigenen Einheiten gefunden.</div>`;
-        return ownUnits.map(unit => {
+        return ownUnits.map((unit, index) => {
           const outgoing = ownAttacks.get(unit.id) || { ranged: [], melee: [] };
           const incomingAll = collectIncomingThreats(unit, enemyAttacks);
           return `
             <section class="mini-card">
-              <div class="card-title">
-                <h3>${escapeHtml(unit.name)}</h3>
-                <span class="muted">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
-              </div>
-              <div class="grid two">
-                ${renderArmyCompareMode("Beste Ziele Fernkampf", outgoing.ranged, "target")}
-                ${renderArmyCompareMode("Beste Ziele Nahkampf", outgoing.melee, "target")}
-              </div>
-              <div class="grid two">
-                ${renderArmyCompareMode("Vorsicht vor Fernkampf", incomingAll.ranged, "threat")}
-                ${renderArmyCompareMode("Vorsicht vor Nahkampf", incomingAll.melee, "threat")}
-              </div>
+              <details class="section-details" ${index === 0 ? "open" : ""}>
+                <summary>
+                  <div class="summary-head">
+                    <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(unit.name)}</span>
+                    <span class="section-summary-text">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
+                  </div>
+                </summary>
+                <div class="section-details-body stack">
+                  <div class="grid two">
+                    ${renderArmyCompareMode("Beste Ziele Fernkampf", outgoing.ranged, "target")}
+                    ${renderArmyCompareMode("Beste Ziele Nahkampf", outgoing.melee, "target")}
+                  </div>
+                  <div class="grid two">
+                    ${renderArmyCompareMode("Vorsicht vor Fernkampf", incomingAll.ranged, "threat")}
+                    ${renderArmyCompareMode("Vorsicht vor Nahkampf", incomingAll.melee, "threat")}
+                  </div>
+                </div>
+              </details>
             </section>
           `;
         }).join("");
@@ -4299,18 +4315,26 @@
 
       function renderArmyCompareMode(title, results, perspective) {
         const sorted = results.slice().sort((a, b) =>
+          b.reliableDamageRatio - a.reliableDamageRatio ||
           b.killProbability - a.killProbability ||
           b.reliableDamage - a.reliableDamage ||
           b.expectedDamage - a.expectedDamage
-        );
+        ).slice(0, 3);
         return `
           <div class="mini-card">
-            <div class="card-title">
-              <h3>${escapeHtml(title)}</h3>
-            </div>
-            <div class="list-stack">
-              ${sorted.length ? sorted.map(result => renderArmyCompareRow(result, perspective)).join("") : `<div class="list-row"><span>Keine berechenbaren Waffen.</span></div>`}
-            </div>
+            <details class="mini-details">
+              <summary>
+                <div class="meta-row">
+                  <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(title)}</span>
+                  <span class="muted">${sorted.length ? `${sorted.length} Treffer` : "leer"}</span>
+                </div>
+              </summary>
+              <div class="mini-details-body">
+                <div class="list-stack">
+                  ${sorted.length ? sorted.map(result => renderArmyCompareRow(result, perspective)).join("") : `<div class="list-row"><span>Keine berechenbaren Waffen.</span></div>`}
+                </div>
+              </div>
+            </details>
           </div>
         `;
       }
@@ -4323,6 +4347,7 @@
             <span>
               <strong>${escapeHtml(unit.name)}</strong><br />
               65%-Schaden: <strong>${escapeHtml(result.reliableDamage)}</strong>,
+              LP-Anteil: <strong>${escapeHtml(formatPercent(result.reliableDamageRatio))}</strong>,
               Erwartung: <strong>${escapeHtml(formatNumber(result.expectedDamage))}</strong>,
               Zerstörung: <strong>${escapeHtml(formatPercent(result.killProbability))}</strong><br />
               <small>${escapeHtml(weapons)}</small>
