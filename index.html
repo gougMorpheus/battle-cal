@@ -1066,6 +1066,11 @@
           <button type="button" id="compareOpenBtn">Vergleich öffnen</button>
         </div>
 
+        <div class="menu-section">
+          <div class="menu-section-title">Armeen</div>
+          <button type="button" id="armyEditorOpenBtn">Einheiten bearbeiten</button>
+        </div>
+
       </div>
     </div>
 
@@ -1371,6 +1376,92 @@
     </div>
   </div>
 
+  <div id="armyEditorModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="armyEditorTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="armyEditorTitle">Einheiten bearbeiten</h2>
+          <div class="muted">Armeen und Einheiten in der Cloud-Datenbank verwalten.</div>
+        </div>
+        <button type="button" id="armyEditorCloseBtn" class="modal-close">Schließen</button>
+      </div>
+
+      <div class="stack">
+        <section class="mini-card">
+          <div class="card-title">
+            <h3>Armee</h3>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorRosterSelect">Armee auswählen</label>
+              <select id="armyEditorRosterSelect"></select>
+            </div>
+            <div class="field">
+              <label for="armyEditorRosterName">Neue Armee</label>
+              <input id="armyEditorRosterName" type="text" autocomplete="off" placeholder="Name der Armee" />
+            </div>
+          </div>
+          <div class="button-row core-actions">
+            <button type="button" id="armyEditorCreateRosterBtn" class="primary">Armee hinzufügen</button>
+          </div>
+        </section>
+
+        <section class="mini-card">
+          <div class="card-title">
+            <h3>Einheit</h3>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorUnitSelect">Einheit auswählen</label>
+              <select id="armyEditorUnitSelect"></select>
+            </div>
+            <div class="field">
+              <label for="armyEditorUnitName">Name</label>
+              <input id="armyEditorUnitName" type="text" autocomplete="off" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorModelCount">Modelle</label>
+              <input id="armyEditorModelCount" type="number" min="1" step="1" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label for="armyEditorToughness">Widerstand</label>
+              <input id="armyEditorToughness" type="number" min="1" step="1" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorSave">Save</label>
+              <select id="armyEditorSave">
+                <option value="">Kein Save</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="armyEditorWounds">Lebenspunkte pro Modell</label>
+              <input id="armyEditorWounds" type="number" min="1" step="1" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorObjectiveControl">Objective Control</label>
+              <input id="armyEditorObjectiveControl" type="number" min="0" step="1" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label for="armyEditorProfileName">Profilname</label>
+              <input id="armyEditorProfileName" type="text" autocomplete="off" />
+            </div>
+          </div>
+          <div class="button-row core-actions">
+            <button type="button" id="armyEditorNewUnitBtn">Neue Einheit</button>
+            <button type="button" id="armyEditorSaveUnitBtn" class="primary">Einheit speichern</button>
+            <button type="button" id="armyEditorDeleteUnitBtn" class="warn">Einheit löschen</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <script>
     (() => {
       "use strict";
@@ -1431,6 +1522,23 @@
         comparePickerList: document.getElementById("comparePickerList"),
         compareTableContainer: document.getElementById("compareTableContainer"),
         compareSelectionInfo: document.getElementById("compareSelectionInfo"),
+        armyEditorOpenBtn: document.getElementById("armyEditorOpenBtn"),
+        armyEditorModal: document.getElementById("armyEditorModal"),
+        armyEditorCloseBtn: document.getElementById("armyEditorCloseBtn"),
+        armyEditorRosterSelect: document.getElementById("armyEditorRosterSelect"),
+        armyEditorRosterName: document.getElementById("armyEditorRosterName"),
+        armyEditorCreateRosterBtn: document.getElementById("armyEditorCreateRosterBtn"),
+        armyEditorUnitSelect: document.getElementById("armyEditorUnitSelect"),
+        armyEditorUnitName: document.getElementById("armyEditorUnitName"),
+        armyEditorModelCount: document.getElementById("armyEditorModelCount"),
+        armyEditorToughness: document.getElementById("armyEditorToughness"),
+        armyEditorSave: document.getElementById("armyEditorSave"),
+        armyEditorWounds: document.getElementById("armyEditorWounds"),
+        armyEditorObjectiveControl: document.getElementById("armyEditorObjectiveControl"),
+        armyEditorProfileName: document.getElementById("armyEditorProfileName"),
+        armyEditorNewUnitBtn: document.getElementById("armyEditorNewUnitBtn"),
+        armyEditorSaveUnitBtn: document.getElementById("armyEditorSaveUnitBtn"),
+        armyEditorDeleteUnitBtn: document.getElementById("armyEditorDeleteUnitBtn"),
         floatingHistoryToggle: document.getElementById("floatingHistoryToggle"),
         exportHistoryBtn: document.getElementById("exportHistoryBtn"),
         importHistoryBtn: document.getElementById("importHistoryBtn"),
@@ -1522,7 +1630,7 @@
           });
         });
 
-        [ids.saveTarget, ids.fnpTarget].forEach(select => {
+        [ids.saveTarget, ids.fnpTarget, ids.armyEditorSave].forEach(select => {
           facesSaveFnp.forEach(value => {
             const option = document.createElement("option");
             option.value = String(value);
@@ -1771,6 +1879,42 @@
           ids.compareModal.classList.add("show");
           ids.compareModal.setAttribute("aria-hidden", "false");
           renderCompareModal();
+        });
+
+        ids.armyEditorOpenBtn.addEventListener("click", () => {
+          openArmyEditor();
+        });
+
+        ids.armyEditorCloseBtn.addEventListener("click", () => {
+          closeArmyEditor();
+        });
+
+        ids.armyEditorModal.addEventListener("click", event => {
+          if (event.target === ids.armyEditorModal) closeArmyEditor();
+        });
+
+        ids.armyEditorRosterSelect.addEventListener("change", async () => {
+          await refreshArmyEditorUnits();
+        });
+
+        ids.armyEditorUnitSelect.addEventListener("change", () => {
+          loadSelectedArmyEditorUnit();
+        });
+
+        ids.armyEditorCreateRosterBtn.addEventListener("click", async () => {
+          await createArmyEditorRoster();
+        });
+
+        ids.armyEditorNewUnitBtn.addEventListener("click", () => {
+          clearArmyEditorUnitForm();
+        });
+
+        ids.armyEditorSaveUnitBtn.addEventListener("click", async () => {
+          await saveArmyEditorUnit();
+        });
+
+        ids.armyEditorDeleteUnitBtn.addEventListener("click", async () => {
+          await deleteArmyEditorUnit();
         });
 
         ids.compareCloseBtn.addEventListener("click", closeCompareModal);
@@ -3897,6 +4041,187 @@
         return text ? JSON.parse(text) : null;
       }
 
+      async function openArmyEditor() {
+        closeFloatingMenu();
+        ids.armyEditorModal.classList.add("show");
+        ids.armyEditorModal.setAttribute("aria-hidden", "false");
+        await refreshArmyEditor();
+      }
+
+      function closeArmyEditor() {
+        ids.armyEditorModal.classList.remove("show");
+        ids.armyEditorModal.setAttribute("aria-hidden", "true");
+      }
+
+      async function refreshArmyEditor() {
+        if (typeof fetch !== "function") {
+          showToast("Cloud-Datenbank ist in dieser Umgebung nicht verfügbar.");
+          return;
+        }
+        await refreshArmyData();
+        renderArmyRosterSelect(ids.armyEditorRosterSelect);
+        if (!ids.armyEditorRosterSelect.value && armyRosters[0]) ids.armyEditorRosterSelect.value = armyRosters[0].id;
+        await refreshArmyEditorUnits();
+      }
+
+      async function refreshArmyData() {
+        armyUnitsByRoster.clear();
+        armyWeaponsByUnit.clear();
+        armyRosters = await supabaseRequest("/rest/v1/army_rosters?select=id,name&order=name.asc") || [];
+        renderArmyRosterSelect(ids.armyAttackerRoster);
+        renderArmyRosterSelect(ids.armyTargetRoster);
+        if (ids.armyAttackerRoster.value) await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
+        if (ids.armyTargetRoster.value) await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
+        await renderArmyWeapons();
+      }
+
+      async function refreshArmyEditorUnits() {
+        const rosterId = ids.armyEditorRosterSelect.value;
+        const units = await loadArmyUnits(rosterId);
+        ids.armyEditorUnitSelect.innerHTML = units.length
+          ? units.map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)} (${unit.model_count}x)</option>`).join("")
+          : `<option value="">Neue Einheit</option>`;
+        loadSelectedArmyEditorUnit();
+      }
+
+      function loadSelectedArmyEditorUnit() {
+        const rosterId = ids.armyEditorRosterSelect.value;
+        const units = armyUnitsByRoster.get(rosterId) || [];
+        const unit = units.find(item => item.id === ids.armyEditorUnitSelect.value);
+        if (!unit) {
+          clearArmyEditorUnitForm();
+          return;
+        }
+        ids.armyEditorUnitName.value = unit.name || "";
+        ids.armyEditorModelCount.value = String(unit.model_count || 1);
+        ids.armyEditorToughness.value = unit.toughness ? String(unit.toughness) : "";
+        ids.armyEditorSave.value = unit.save ? String(unit.save) : "";
+        ids.armyEditorWounds.value = unit.wounds_per_model ? String(unit.wounds_per_model) : "";
+        ids.armyEditorObjectiveControl.value = unit.objective_control || unit.objective_control === 0 ? String(unit.objective_control) : "";
+        ids.armyEditorProfileName.value = unit.profile_name || "";
+      }
+
+      function clearArmyEditorUnitForm() {
+        ids.armyEditorUnitSelect.value = "";
+        ids.armyEditorUnitName.value = "";
+        ids.armyEditorModelCount.value = "1";
+        ids.armyEditorToughness.value = "";
+        ids.armyEditorSave.value = "";
+        ids.armyEditorWounds.value = "";
+        ids.armyEditorObjectiveControl.value = "";
+        ids.armyEditorProfileName.value = "";
+      }
+
+      async function createArmyEditorRoster() {
+        const name = ids.armyEditorRosterName.value.trim();
+        if (!name) {
+          showToast("Name der neuen Armee fehlt.");
+          return;
+        }
+        const id = `manual-roster-${createId()}`;
+        try {
+          await supabaseRequest("/rest/v1/army_rosters", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({
+              id,
+              name,
+              source_file: "manual",
+              catalogue_name: name,
+              game_system_name: "Warhammer 40,000"
+            })
+          });
+          ids.armyEditorRosterName.value = "";
+          await refreshArmyEditor();
+          ids.armyEditorRosterSelect.value = id;
+          await refreshArmyEditorUnits();
+          showToast("Armee angelegt.");
+        } catch {
+          showToast("Armee konnte nicht gespeichert werden.");
+        }
+      }
+
+      async function saveArmyEditorUnit() {
+        const rosterId = ids.armyEditorRosterSelect.value;
+        const name = ids.armyEditorUnitName.value.trim();
+        const modelCount = parsePositiveInt(ids.armyEditorModelCount.value);
+        const toughness = parsePositiveInt(ids.armyEditorToughness.value);
+        const save = ids.armyEditorSave.value === "" ? null : parseBoundedInt(ids.armyEditorSave.value, 2, 6);
+        const wounds = parsePositiveInt(ids.armyEditorWounds.value);
+        const objectiveControl = ids.armyEditorObjectiveControl.value === "" ? null : parsePositiveInt(ids.armyEditorObjectiveControl.value);
+        const profileName = ids.armyEditorProfileName.value.trim();
+
+        if (!rosterId) {
+          showToast("Bitte zuerst eine Armee wählen oder anlegen.");
+          return;
+        }
+        if (!name || modelCount === null || toughness === null || wounds === null || (ids.armyEditorSave.value !== "" && save === null) || (ids.armyEditorObjectiveControl.value !== "" && objectiveControl === null)) {
+          showToast("Bitte Einheit vollständig und gültig ausfüllen.");
+          return;
+        }
+
+        const existingId = ids.armyEditorUnitSelect.value;
+        const editablePayload = {
+          roster_id: rosterId,
+          name,
+          model_count: modelCount,
+          profile_name: profileName,
+          toughness,
+          save,
+          wounds_per_model: wounds,
+          objective_control: objectiveControl,
+          updated_at: new Date().toISOString()
+        };
+
+        try {
+          if (existingId) {
+            await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(existingId)}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(editablePayload)
+            });
+          } else {
+            await supabaseRequest("/rest/v1/army_units", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({
+                id: `manual-unit-${createId()}`,
+                ...editablePayload,
+                source_file: "manual",
+                raw_selection: { manual: true, createdAt: new Date().toISOString() }
+              })
+            });
+          }
+          await refreshArmyData();
+          ids.armyEditorRosterSelect.value = rosterId;
+          await refreshArmyEditorUnits();
+          showToast("Einheit gespeichert.");
+        } catch {
+          showToast("Einheit konnte nicht gespeichert werden.");
+        }
+      }
+
+      async function deleteArmyEditorUnit() {
+        const unitId = ids.armyEditorUnitSelect.value;
+        const rosterId = ids.armyEditorRosterSelect.value;
+        if (!unitId) {
+          showToast("Keine Einheit ausgewählt.");
+          return;
+        }
+        if (!window.confirm("Einheit wirklich aus der Cloud-Datenbank löschen?")) return;
+        try {
+          await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(unitId)}`, {
+            method: "DELETE"
+          });
+          await refreshArmyData();
+          ids.armyEditorRosterSelect.value = rosterId;
+          await refreshArmyEditorUnits();
+          showToast("Einheit gelöscht.");
+        } catch {
+          showToast("Einheit konnte nicht gelöscht werden.");
+        }
+      }
+
       async function initArmyPicker() {
         if (typeof fetch !== "function") {
           ids.armyWeaponList.innerHTML = `<div class="muted">Armee-Daten nicht verfügbar.</div>`;
@@ -3928,7 +4253,7 @@
       async function loadArmyUnits(rosterId) {
         if (!rosterId) return [];
         if (armyUnitsByRoster.has(rosterId)) return armyUnitsByRoster.get(rosterId);
-        const units = await supabaseRequest(`/rest/v1/army_units?select=id,name,model_count,toughness,save,wounds_per_model,profile_name&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`) || [];
+        const units = await supabaseRequest(`/rest/v1/army_units?select=id,roster_id,name,model_count,toughness,save,wounds_per_model,profile_name,objective_control,source_file,movement_text,leadership_text&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`) || [];
         armyUnitsByRoster.set(rosterId, units);
         return units;
       }
