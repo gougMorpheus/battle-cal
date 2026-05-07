@@ -104,6 +104,25 @@
         var(--bg-card);
     }
 
+    .input-toggle {
+      width: auto;
+      min-width: 0;
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 999px;
+      font-size: 0.86rem;
+    }
+
+    .input-body {
+      display: grid;
+      gap: 12px;
+    }
+
+    .input-collapsed .input-body,
+    .input-collapsed .secondary-card {
+      display: none;
+    }
+
     .secondary-card {
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.012), rgba(255, 255, 255, 0)),
@@ -1032,8 +1051,10 @@
               <span class="section-kicker">Eingabe</span>
               <h2>Eingabe</h2>
             </div>
+            <button type="button" id="inputToggleBtn" class="ghost input-toggle" aria-expanded="true">Eingabe schließen</button>
           </div>
 
+          <div id="inputBody" class="input-body">
           <div class="grid">
             <div class="field">
               <label for="attackMode">Attackenmodus</label>
@@ -1083,6 +1104,7 @@
           <div class="button-row core-actions desktop-actions">
             <button type="submit" class="primary">Berechnen</button>
             <button type="button" id="resetBtn">Reset</button>
+          </div>
           </div>
         </section>
 
@@ -1318,6 +1340,7 @@
 
       const ids = {
         form: document.getElementById("calculatorForm"),
+        inputToggleBtn: document.getElementById("inputToggleBtn"),
         toast: document.getElementById("toast"),
         menuToggleBtn: document.getElementById("menuToggleBtn"),
         floatingMenuPanel: document.getElementById("floatingMenuPanel"),
@@ -1434,6 +1457,10 @@
       function wireUi() {
         ids.menuToggleBtn.addEventListener("click", () => {
           toggleFloatingMenu();
+        });
+
+        ids.inputToggleBtn.addEventListener("click", () => {
+          toggleInputCollapsed();
         });
 
         document.addEventListener("click", event => {
@@ -1689,6 +1716,14 @@
       function closeFloatingMenu() {
         ids.floatingMenuPanel.classList.add("hidden");
         ids.menuToggleBtn.setAttribute("aria-expanded", "false");
+      }
+
+      function toggleInputCollapsed() {
+        const collapsed = !ids.form.classList.contains("input-collapsed");
+        ids.form.classList.toggle("input-collapsed", collapsed);
+        ids.inputToggleBtn.textContent = collapsed ? "Eingabe öffnen" : "Eingabe schließen";
+        ids.inputToggleBtn.setAttribute("aria-expanded", String(!collapsed));
+        updateStickyJumpButton();
       }
 
       function jumpBetweenInputAndResult() {
