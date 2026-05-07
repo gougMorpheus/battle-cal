@@ -209,6 +209,11 @@
       border-color: var(--line-strong);
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+    }
+
     button.primary {
       background: linear-gradient(180deg, rgba(127, 227, 197, 0.24), rgba(127, 227, 197, 0.12));
       border-color: rgba(127, 227, 197, 0.28);
@@ -928,6 +933,11 @@
             </div>
             <button type="button" id="cloudProfileCreateBtn">Anlegen</button>
           </div>
+          <div class="standalone-action-group">
+            <button type="button" id="cloudProfilesRefreshBtn">Neu laden</button>
+            <button type="button" id="cloudProfileRenameBtn">Umbenennen</button>
+            <button type="button" id="cloudProfileDeleteBtn" class="warn">Profil löschen</button>
+          </div>
         </div>
 
         <div class="menu-section">
@@ -1267,6 +1277,9 @@
         cloudProfileSelect: document.getElementById("cloudProfileSelect"),
         cloudProfileName: document.getElementById("cloudProfileName"),
         cloudProfileCreateBtn: document.getElementById("cloudProfileCreateBtn"),
+        cloudProfilesRefreshBtn: document.getElementById("cloudProfilesRefreshBtn"),
+        cloudProfileRenameBtn: document.getElementById("cloudProfileRenameBtn"),
+        cloudProfileDeleteBtn: document.getElementById("cloudProfileDeleteBtn"),
         attackMode: document.getElementById("attackMode"),
         attackFields: document.getElementById("attackFields"),
         hitTarget: document.getElementById("hitTarget"),
@@ -1441,6 +1454,18 @@
 
         ids.cloudProfileCreateBtn.addEventListener("click", async () => {
           await createCloudProfile();
+        });
+
+        ids.cloudProfilesRefreshBtn.addEventListener("click", async () => {
+          await refreshCloudProfiles();
+        });
+
+        ids.cloudProfileRenameBtn.addEventListener("click", async () => {
+          await renameCloudProfile();
+        });
+
+        ids.cloudProfileDeleteBtn.addEventListener("click", async () => {
+          await deleteCloudProfile();
         });
 
         ids.clearHistoryBtn.addEventListener("click", async () => {
@@ -3090,6 +3115,8 @@
         ];
         ids.cloudProfileSelect.innerHTML = options.join("");
         ids.cloudProfileSelect.value = cloudProfile?.id || "";
+        ids.cloudProfileRenameBtn.disabled = !cloudProfile;
+        ids.cloudProfileDeleteBtn.disabled = !cloudProfile;
       }
 
       async function createCloudProfile() {
@@ -3118,6 +3145,90 @@
         } catch {
           updateSyncStatus("error", "Profil konnte nicht angelegt werden.");
           showToast("Cloud-Profil konnte nicht angelegt werden.");
+        }
+      }
+
+      async function refreshCloudProfiles() {
+        if (typeof fetch !== "function") {
+          showToast("Cloud-Sync ist in dieser Umgebung nicht verfügbar.");
+          return;
+        }
+
+        try {
+          updateSyncStatus("loading");
+          await loadCloudProfiles();
+          renderCloudProfiles();
+          updateSyncStatus();
+          showToast("Cloud-Profile neu geladen.");
+        } catch {
+          updateSyncStatus("error", "Profile konnten nicht geladen werden.");
+          showToast("Cloud-Profile konnten nicht geladen werden.");
+        }
+      }
+
+      async function renameCloudProfile() {
+        if (!cloudProfile) {
+          showToast("Kein Cloud-Profil ausgewählt.");
+          return;
+        }
+
+        const nextName = window.prompt("Neuer Profilname:", cloudProfile.name);
+        if (nextName === null) return;
+        const name = nextName.trim();
+        if (!name) {
+          showToast("Profilname fehlt.");
+          return;
+        }
+
+        try {
+          updateSyncStatus("loading");
+          const [profile] = await supabaseRequest(`/rest/v1/battle_profiles?id=eq.${encodeURIComponent(cloudProfile.id)}&select=id,name,created_at`, {
+            method: "PATCH",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify({ name })
+          });
+          cloudProfile = profile;
+          await loadCloudProfiles();
+          renderCloudProfiles();
+          saveCloudProfile();
+          markSynced();
+          showToast("Cloud-Profil umbenannt.");
+        } catch {
+          updateSyncStatus("error", "Profil konnte nicht umbenannt werden.");
+          showToast("Cloud-Profil konnte nicht umbenannt werden.");
+        }
+      }
+
+      async function deleteCloudProfile() {
+        if (!cloudProfile) {
+          showToast("Kein Cloud-Profil ausgewählt.");
+          return;
+        }
+
+        const name = cloudProfile.name;
+        if (!window.confirm(`Cloud-Profil "${name}" inklusive Historie wirklich löschen?`)) return;
+
+        try {
+          updateSyncStatus("loading");
+          await supabaseRequest(`/rest/v1/battle_profiles?id=eq.${encodeURIComponent(cloudProfile.id)}`, {
+            method: "DELETE"
+          });
+          cloudProfile = null;
+          lastSyncedAt = "";
+          saveCloudProfile();
+          saveLastSyncedAt();
+          historyEntries = [];
+          compareSelection = [];
+          openHistoryId = null;
+          saveHistory();
+          await loadCloudProfiles();
+          renderCloudProfiles();
+          renderHistory();
+          updateSyncStatus();
+          showToast(`Cloud-Profil ${name} gelöscht.`);
+        } catch {
+          updateSyncStatus("error", "Profil konnte nicht gelöscht werden.");
+          showToast("Cloud-Profil konnte nicht gelöscht werden.");
         }
       }
 
