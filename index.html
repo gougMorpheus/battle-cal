@@ -1413,6 +1413,7 @@
       let historyEntries = loadHistory();
       let uiState = loadUiState();
       let openHistoryId = null;
+      let editingHistoryId = null;
       let compareSelection = [];
       let cloudProfile = loadCloudProfile();
       let cloudProfiles = [];
@@ -1524,11 +1525,13 @@
         });
 
         ids.resetBtn.addEventListener("click", () => {
+          editingHistoryId = null;
           applyBaseProfile();
           clearErrors();
         });
 
         ids.stickyResetBtn.addEventListener("click", () => {
+          editingHistoryId = null;
           applyBaseProfile();
           clearErrors();
         });
@@ -1554,6 +1557,7 @@
             historyEntries = loadHistory();
             compareSelection = [];
             openHistoryId = null;
+            editingHistoryId = null;
             renderHistory();
             updateSyncStatus();
             showToast("Lokale Historie aktiv.");
@@ -1603,6 +1607,7 @@
           if (!window.confirm("Komplette Historie wirklich löschen?")) return;
           historyEntries = [];
           compareSelection = [];
+          editingHistoryId = null;
           saveHistory();
           await clearCloudHistory();
           renderHistory();
@@ -1620,8 +1625,14 @@
           if (!entry) return;
 
           if (action === "load") {
+            editingHistoryId = null;
             loadInputsIntoForm(entry.inputs);
             showToast("Eingaben ins Formular geladen.");
+            return;
+          }
+
+          if (action === "edit") {
+            startEditingHistoryEntry(entry);
             return;
           }
 
@@ -1647,6 +1658,7 @@
           if (action === "delete") {
             historyEntries = historyEntries.filter(item => item.id !== id);
             compareSelection = compareSelection.filter(selectedId => selectedId !== id);
+            if (editingHistoryId === id) editingHistoryId = null;
             saveHistory();
             deleteCloudEntry(id);
             renderHistory();
@@ -1862,6 +1874,18 @@
         updateSectionSummaries();
       }
 
+      function startEditingHistoryEntry(entry) {
+        editingHistoryId = entry.id;
+        openHistoryId = entry.id;
+        loadInputsIntoForm(entry.inputs);
+        ids.form.classList.remove("input-collapsed");
+        ids.inputToggleBtn.textContent = "Eingabe schließen";
+        ids.inputToggleBtn.setAttribute("aria-expanded", "true");
+        scrollToElement(ids.form);
+        renderHistory();
+        showToast("Bearbeitungsmodus aktiv. Berechnen aktualisiert dieses Ergebnis.");
+      }
+
       function calculateAndStore() {
         const parsed = parseAndValidateInputs();
         if (!parsed.ok) {
@@ -1871,6 +1895,23 @@
 
         clearErrors();
         const outputs = calculateAll(parsed.data);
+        const editingEntry = editingHistoryId
+          ? historyEntries.find(entry => entry.id === editingHistoryId)
+          : null;
+        if (editingHistoryId && !editingEntry) editingHistoryId = null;
+
+        if (editingEntry) {
+          editingEntry.inputs = parsed.data;
+          editingEntry.outputs = outputs;
+          openHistoryId = editingEntry.id;
+          editingHistoryId = null;
+          saveHistory();
+          syncCloudEntry(editingEntry);
+          renderHistory();
+          showToast("Ergebnis aktualisiert");
+          return;
+        }
+
         const newEntry = {
           id: createId(),
           createdAt: new Date().toISOString(),
@@ -2920,6 +2961,7 @@
               <div class="history-body">
                 <div class="history-actions">
                   <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
+                  <button type="button" class="ghost" data-action="edit" data-id="${entry.id}">${editingHistoryId === entry.id ? "Wird bearbeitet" : "Bearbeiten"}</button>
                   <button type="button" class="ghost" data-action="rename" data-id="${entry.id}">Name</button>
                   <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
                   <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
@@ -3390,11 +3432,13 @@
           });
           cloudProfile = null;
           lastSyncedAt = "";
+          editingHistoryId = null;
           saveCloudProfile();
           saveLastSyncedAt();
           historyEntries = [];
           compareSelection = [];
           openHistoryId = null;
+          editingHistoryId = null;
           saveHistory();
           await loadCloudProfiles();
           renderCloudProfiles();
@@ -3421,6 +3465,7 @@
           })).filter(entry => entry.inputs && entry.outputs);
           saveHistory();
           compareSelection = compareSelection.filter(id => historyEntries.some(entry => entry.id === id));
+          editingHistoryId = null;
           openHistoryId = historyEntries[0]?.id || null;
           renderHistory();
           markSynced();
@@ -4151,6 +4196,7 @@
               <div class="history-body">
                 <div class="history-actions">
                   <button type="button" class="ghost" data-action="load" data-id="${entry.id}">Laden</button>
+                  <button type="button" class="ghost" data-action="edit" data-id="${entry.id}">${editingHistoryId === entry.id ? "Wird bearbeitet" : "Bearbeiten"}</button>
                   <button type="button" class="ghost" data-action="rename" data-id="${entry.id}">Name</button>
                   <button type="button" class="ghost" data-action="export" data-id="${entry.id}">Export</button>
                   <button type="button" class="warn" data-action="delete" data-id="${entry.id}">Löschen</button>
