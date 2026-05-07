@@ -118,8 +118,44 @@
       gap: 12px;
     }
 
+    .input-mode-toggle {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .input-mode-toggle button {
+      min-height: 42px;
+    }
+
+    .input-mode-toggle button.active {
+      border-color: rgba(127, 227, 197, 0.34);
+      background: rgba(127, 227, 197, 0.13);
+      color: #effff9;
+      font-weight: 700;
+    }
+
+    .army-selection-body {
+      display: none;
+      gap: 12px;
+    }
+
     .input-collapsed .input-body,
     .input-collapsed .secondary-card {
+      display: none;
+    }
+
+    .input-selection-mode .input-body,
+    .input-selection-mode .secondary-card {
+      display: none;
+    }
+
+    .input-selection-mode .army-selection-body {
+      display: grid;
+    }
+
+    .input-collapsed.input-selection-mode .army-selection-body {
       display: none;
     }
 
@@ -1008,34 +1044,6 @@
           <button type="button" id="compareOpenBtn">Vergleich öffnen</button>
         </div>
 
-        <div class="menu-section">
-          <div class="menu-section-title">Armeen</div>
-          <div class="grid">
-            <div class="field">
-              <label for="armyAttackerRoster">Angreifer-Armee</label>
-              <select id="armyAttackerRoster"></select>
-            </div>
-            <div class="field">
-              <label for="armyAttackerUnit">Angreifer-Einheit</label>
-              <select id="armyAttackerUnit"></select>
-            </div>
-            <div class="field">
-              <label>Waffen</label>
-              <div id="armyWeaponList" class="weapon-picker">
-                <div class="muted">Armee laden...</div>
-              </div>
-            </div>
-            <div class="field">
-              <label for="armyTargetRoster">Ziel-Armee</label>
-              <select id="armyTargetRoster"></select>
-            </div>
-            <div class="field">
-              <label for="armyTargetUnit">Ziel-Einheit</label>
-              <select id="armyTargetUnit"></select>
-            </div>
-            <button type="button" id="armyCalculateBtn" class="primary">Aus Armee berechnen</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -1052,6 +1060,11 @@
               <h2>Eingabe</h2>
             </div>
             <button type="button" id="inputToggleBtn" class="ghost input-toggle" aria-expanded="true">Eingabe schließen</button>
+          </div>
+
+          <div class="input-mode-toggle" role="group" aria-label="Eingabemodus">
+            <button type="button" id="inputModeManualBtn" class="active">Manuell</button>
+            <button type="button" id="inputModeArmyBtn">Auswahl</button>
           </div>
 
           <div id="inputBody" class="input-body">
@@ -1105,6 +1118,38 @@
             <button type="submit" class="primary">Berechnen</button>
             <button type="button" id="resetBtn">Reset</button>
           </div>
+          </div>
+
+          <div id="armySelectionBody" class="army-selection-body">
+            <div class="grid two">
+              <div class="field">
+                <label for="armyAttackerRoster">Angreifer-Armee</label>
+                <select id="armyAttackerRoster"></select>
+              </div>
+              <div class="field">
+                <label for="armyAttackerUnit">Angreifer-Einheit</label>
+                <select id="armyAttackerUnit"></select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Waffen</label>
+              <div id="armyWeaponList" class="weapon-picker">
+                <div class="muted">Armee laden...</div>
+              </div>
+            </div>
+            <div class="grid two">
+              <div class="field">
+                <label for="armyTargetRoster">Ziel-Armee</label>
+                <select id="armyTargetRoster"></select>
+              </div>
+              <div class="field">
+                <label for="armyTargetUnit">Ziel-Einheit</label>
+                <select id="armyTargetUnit"></select>
+              </div>
+            </div>
+            <div class="button-row core-actions">
+              <button type="button" id="armyCalculateBtn" class="primary">Aus Armee berechnen</button>
+            </div>
           </div>
         </section>
 
@@ -1341,6 +1386,8 @@
       const ids = {
         form: document.getElementById("calculatorForm"),
         inputToggleBtn: document.getElementById("inputToggleBtn"),
+        inputModeManualBtn: document.getElementById("inputModeManualBtn"),
+        inputModeArmyBtn: document.getElementById("inputModeArmyBtn"),
         toast: document.getElementById("toast"),
         menuToggleBtn: document.getElementById("menuToggleBtn"),
         floatingMenuPanel: document.getElementById("floatingMenuPanel"),
@@ -1462,6 +1509,14 @@
 
         ids.inputToggleBtn.addEventListener("click", () => {
           toggleInputCollapsed();
+        });
+
+        ids.inputModeManualBtn.addEventListener("click", () => {
+          setInputMode("manual");
+        });
+
+        ids.inputModeArmyBtn.addEventListener("click", () => {
+          setInputMode("army");
         });
 
         document.addEventListener("click", event => {
@@ -1738,6 +1793,13 @@
         updateStickyJumpButton();
       }
 
+      function setInputMode(mode) {
+        const armyMode = mode === "army";
+        ids.form.classList.toggle("input-selection-mode", armyMode);
+        ids.inputModeManualBtn.classList.toggle("active", !armyMode);
+        ids.inputModeArmyBtn.classList.toggle("active", armyMode);
+      }
+
       function jumpBetweenInputAndResult() {
         if (isFormInViewport()) {
           scrollToCurrentResult();
@@ -1877,6 +1939,7 @@
       function startEditingHistoryEntry(entry) {
         editingHistoryId = entry.id;
         openHistoryId = entry.id;
+        setInputMode("manual");
         loadInputsIntoForm(entry.inputs);
         ids.form.classList.remove("input-collapsed");
         ids.inputToggleBtn.textContent = "Eingabe schließen";
