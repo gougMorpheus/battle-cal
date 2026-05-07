@@ -373,6 +373,19 @@
       font-size: 0.84rem;
     }
 
+    .cloud-profile {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      align-items: end;
+    }
+
+    .cloud-profile button {
+      min-height: 44px;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+
     .toast,
     .note-box,
     .error-box {
@@ -419,6 +432,10 @@
     .results-actions {
       display: flex;
       justify-content: flex-start;
+    }
+
+    .search-field input {
+      width: 100%;
     }
 
     .results-actions button {
@@ -1016,12 +1033,30 @@
           <button type="button" id="clearHistoryBtn" class="warn">Historie löschen</button>
           <input type="file" id="importHistoryFile" accept="application/json,.json" class="hidden" />
         </div>
+
+        <div class="standalone-action cloud-profile">
+          <div class="field">
+            <label for="cloudProfileSelect">Cloud-Profil</label>
+            <select id="cloudProfileSelect">
+              <option value="">Nur lokal</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cloudProfileName">Neues Profil</label>
+            <input id="cloudProfileName" type="text" autocomplete="off" placeholder="z. B. Tim" />
+          </div>
+          <button type="button" id="cloudProfileCreateBtn">Anlegen</button>
+        </div>
       </form>
 
       <section class="results-shell">
         <div id="errorContainer" class="hidden"></div>
         <div class="results-actions">
           <button type="button" id="compareOpenBtn">Vergleich öffnen</button>
+        </div>
+        <div class="field search-field">
+          <label for="historySearch">Ergebnisse durchsuchen</label>
+          <input id="historySearch" type="search" autocomplete="off" placeholder="z. B. FNP, 3+, W6, Kills" />
         </div>
         <div id="historyContainer" class="history-list"></div>
       </section>
@@ -1052,6 +1087,10 @@
           </div>
           <button type="button" id="compareResetBtn" class="ghost">Auswahl zurücksetzen</button>
         </div>
+        <div class="field search-field">
+          <label for="compareSearch">Vergleich durchsuchen</label>
+          <input id="compareSearch" type="search" autocomplete="off" placeholder="z. B. Sustained, Schaden, 4+" />
+        </div>
         <div id="comparePickerList" class="compare-picker-list"></div>
       </div>
 
@@ -1068,6 +1107,9 @@
       const EPSILON = 1e-12;
       const HISTORY_KEY = "wh40k-prob-history-v1";
       const UI_STATE_KEY = "wh40k-prob-ui-state-v1";
+      const CLOUD_PROFILE_KEY = "wh40k-prob-cloud-profile-v1";
+      const SUPABASE_URL = "https://rgvpxnmbuyxqplsfonzm.supabase.co";
+      const SUPABASE_KEY = "sb_publishable_iUwn_cBLDcPrAaiof1S5hg_FucelzvH";
       const HISTORY_LIMIT = 50;
       const facesHitWound = [1, 2, 3, 4, 5, 6];
       const facesSaveFnp = [2, 3, 4, 5, 6];
@@ -1101,10 +1143,12 @@
         toast: document.getElementById("toast"),
         errorContainer: document.getElementById("errorContainer"),
         historyContainer: document.getElementById("historyContainer"),
+        historySearch: document.getElementById("historySearch"),
         compareOpenBtn: document.getElementById("compareOpenBtn"),
         compareModal: document.getElementById("compareModal"),
         compareCloseBtn: document.getElementById("compareCloseBtn"),
         compareResetBtn: document.getElementById("compareResetBtn"),
+        compareSearch: document.getElementById("compareSearch"),
         comparePickerList: document.getElementById("comparePickerList"),
         compareTableContainer: document.getElementById("compareTableContainer"),
         compareSelectionInfo: document.getElementById("compareSelectionInfo"),
@@ -1112,6 +1156,9 @@
         exportHistoryBtn: document.getElementById("exportHistoryBtn"),
         importHistoryBtn: document.getElementById("importHistoryBtn"),
         importHistoryFile: document.getElementById("importHistoryFile"),
+        cloudProfileSelect: document.getElementById("cloudProfileSelect"),
+        cloudProfileName: document.getElementById("cloudProfileName"),
+        cloudProfileCreateBtn: document.getElementById("cloudProfileCreateBtn"),
         attackMode: document.getElementById("attackMode"),
         attackFields: document.getElementById("attackFields"),
         hitTarget: document.getElementById("hitTarget"),
@@ -1152,6 +1199,8 @@
       let uiState = loadUiState();
       let openHistoryId = null;
       let compareSelection = [];
+      let cloudProfile = loadCloudProfile();
+      let cloudProfiles = [];
 
       initSelects();
       renderModeFields("attack");
@@ -1161,6 +1210,7 @@
       restoreAccordionState();
       updateSectionSummaries();
       renderHistory();
+      initCloud();
 
       function initSelects() {
         [ids.hitTarget, ids.woundTarget].forEach(select => {
@@ -1240,7 +1290,34 @@
           clearErrors();
         });
 
-        ids.clearHistoryBtn.addEventListener("click", () => {
+        ids.historySearch.addEventListener("input", () => {
+          renderHistory();
+        });
+
+        ids.compareSearch.addEventListener("input", () => {
+          renderCompareModal();
+        });
+
+        ids.cloudProfileSelect.addEventListener("change", async () => {
+          const selectedId = ids.cloudProfileSelect.value;
+          cloudProfile = cloudProfiles.find(profile => profile.id === selectedId) || null;
+          saveCloudProfile();
+          if (!cloudProfile) {
+            historyEntries = loadHistory();
+            compareSelection = [];
+            openHistoryId = null;
+            renderHistory();
+            showToast("Lokale Historie aktiv.");
+            return;
+          }
+          await loadCloudHistory();
+        });
+
+        ids.cloudProfileCreateBtn.addEventListener("click", async () => {
+          await createCloudProfile();
+        });
+
+        ids.clearHistoryBtn.addEventListener("click", async () => {
           if (!historyEntries.length) {
             showToast("Historie ist bereits leer.");
             return;
@@ -1249,6 +1326,7 @@
           historyEntries = [];
           compareSelection = [];
           saveHistory();
+          await clearCloudHistory();
           renderHistory();
           renderCompareModal();
           showToast("Historie gelöscht.");
@@ -1276,6 +1354,7 @@
             if (nextTitle === null) return;
             entry.customTitle = String(nextTitle).trim();
             saveHistory();
+            syncCloudEntry(entry);
             renderHistory();
             showToast(entry.customTitle ? "Bezeichnung aktualisiert." : "Bezeichnung auf Standard zurückgesetzt.");
             return;
@@ -1291,6 +1370,7 @@
             historyEntries = historyEntries.filter(item => item.id !== id);
             compareSelection = compareSelection.filter(selectedId => selectedId !== id);
             saveHistory();
+            deleteCloudEntry(id);
             renderHistory();
             renderCompareModal();
             showToast("Eintrag gelöscht.");
@@ -1470,6 +1550,7 @@
         historyEntries = historyEntries.slice(0, HISTORY_LIMIT);
         openHistoryId = newEntry.id;
         saveHistory();
+        syncCloudEntry(newEntry);
         renderHistory();
         showToast("Berechnung gespeichert");
       }
@@ -2422,6 +2503,44 @@
         return `${kills} Kills + ${formatNumber(remaining)} LP`;
       }
 
+      function normalizeSearch(value) {
+        return String(value || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function filterEntries(entries, searchTerm) {
+        if (!searchTerm) return entries;
+        return entries.filter(entry => normalizeSearch(buildEntrySearchText(entry)).includes(searchTerm));
+      }
+
+      function buildEntrySearchText(entry) {
+        const index = historyEntries.findIndex(item => item.id === entry.id);
+        const inputs = entry.inputs;
+        const outputs = entry.outputs;
+        const parts = [
+          buildHistoryTitle(entry, index),
+          formatDate(entry.createdAt),
+          labelAttackMode(inputs.attackMode, inputs.attackParams),
+          `${inputs.hitTarget}+`,
+          `${inputs.woundTarget}+`,
+          inputs.saveTarget === null ? "Kein Save" : `${inputs.saveTarget}+`,
+          labelDamageMode(inputs.damageMode, inputs.damageParams),
+          buildRulesSummary(inputs),
+          inputs.targetProfile ? `${inputs.targetProfile.modelCount} Modelle ${inputs.targetProfile.woundsPerModel} LP` : "Zielprofil aus",
+          `Treffer ${formatNumber(outputs.expected.hits)}`,
+          `Verwundungen ${formatNumber(outputs.expected.wounds)}`,
+          `Unsaved Wounds ${formatNumber(outputs.expected.unsaved)}`,
+          `Gesamtschaden ${formatNumber(outputs.expected.damage)}`,
+          outputs.killResults ? `Kills ${outputs.killResults.expectedKillOutput}` : "Kills aus"
+        ];
+        return parts.join(" ");
+      }
+
       function renderHistory() {
         if (!historyEntries.length) {
           ids.historyContainer.innerHTML = `
@@ -2432,7 +2551,20 @@
           return;
         }
 
-        ids.historyContainer.innerHTML = historyEntries.map((entry, index) => renderHistoryCard(entry, index)).join("");
+        const searchTerm = normalizeSearch(ids.historySearch.value);
+        const visibleEntries = filterEntries(historyEntries, searchTerm);
+        if (!visibleEntries.length) {
+          ids.historyContainer.innerHTML = `
+            <section class="card panel">
+              <div class="note-box">Keine Ergebnisse für diese Suche.</div>
+            </section>
+          `;
+          updateFloatingHistoryToggle();
+          renderCompareModal();
+          return;
+        }
+
+        ids.historyContainer.innerHTML = visibleEntries.map(entry => renderHistoryCard(entry, historyEntries.findIndex(item => item.id === entry.id))).join("");
         wireHistoryDetails();
         updateFloatingHistoryToggle();
         renderCompareModal();
@@ -2595,11 +2727,14 @@
       }
 
       function renderCompareModal() {
+        const searchTerm = normalizeSearch(ids.compareSearch.value);
+        const visibleEntries = filterEntries(historyEntries, searchTerm);
         compareSelection = compareSelection.filter(id => historyEntries.some(entry => entry.id === id));
         ids.compareSelectionInfo.textContent = `${compareSelection.length} ausgewählt`;
 
         ids.comparePickerList.innerHTML = historyEntries.length
-          ? historyEntries.map((entry, index) => {
+          ? visibleEntries.map(entry => {
+              const index = historyEntries.findIndex(item => item.id === entry.id);
               const selected = compareSelection.includes(entry.id);
               return `
                 <button type="button" class="compare-option ${selected ? "selected" : ""}" data-compare-id="${entry.id}">
@@ -2613,16 +2748,20 @@
             }).join("")
           : `<div class="compare-empty">Keine Historie vorhanden.</div>`;
 
+        if (historyEntries.length && !visibleEntries.length) {
+          ids.comparePickerList.innerHTML = `<div class="compare-empty">Keine Ergebnisse für diese Suche.</div>`;
+        }
+
         const selectedEntries = compareSelection
           .map(id => historyEntries.find(entry => entry.id === id))
           .filter(Boolean);
 
         ids.compareTableContainer.innerHTML = selectedEntries.length
-          ? renderCompareTable(selectedEntries)
+          ? renderCompareTable(selectedEntries, searchTerm)
           : `<div class="compare-empty">Wähle bis zu 3 gespeicherte Ergebnisse aus.</div>`;
       }
 
-      function renderCompareTable(entries) {
+      function renderCompareTable(entries, searchTerm = "") {
         const maxUnsaved = Math.max(...entries.map(entry => entry.outputs.distributions.unsaved.length - 1));
         const maxKills = Math.max(...entries.map(entry => entry.outputs.killResults ? entry.outputs.killResults.killDistribution.length - 1 : 0));
 
@@ -2662,6 +2801,14 @@
           ));
         }
 
+        const visibleRows = searchTerm
+          ? rows.filter(row => normalizeSearch(row).includes(searchTerm))
+          : rows;
+
+        if (!visibleRows.length) {
+          return `<div class="compare-empty">Keine Tabellenzeilen für diese Suche.</div>`;
+        }
+
         return `
           <table class="compare-table">
             <thead>
@@ -2671,7 +2818,7 @@
               </tr>
             </thead>
             <tbody>
-              ${rows.join("")}
+              ${visibleRows.join("")}
             </tbody>
           </table>
         `;
@@ -2702,8 +2849,8 @@
         const rules = [];
         if (inputs.sustained.enabled) rules.push(`Sustained ${inputs.sustained.value}`);
         if (inputs.lethal.enabled) rules.push("Lethal");
-        if (inputs.hitReroll !== "none") rules.push(`RR Hit ${shortReroll(inputs.hitReroll)}`);
-        if (inputs.woundReroll !== "none") rules.push(`RR Wound ${shortReroll(inputs.woundReroll)}`);
+        if (inputs.hitReroll && inputs.hitReroll !== "none") rules.push(`RR Hit ${shortReroll(inputs.hitReroll)}`);
+        if (inputs.woundReroll && inputs.woundReroll !== "none") rules.push(`RR Wound ${shortReroll(inputs.woundReroll)}`);
         if (inputs.dev.enabled) rules.push("Dev");
         if (inputs.fnp.enabled) rules.push(`FNP ${inputs.fnp.target}+`);
         if (inputs.preDamage?.enabled) rules.push(`Vorschädigung ${inputs.preDamage.value}`);
@@ -2766,6 +2913,165 @@
       function saveHistory() {
         try {
           localStorage.setItem(HISTORY_KEY, JSON.stringify(historyEntries));
+        } catch {}
+      }
+
+      async function initCloud() {
+        renderCloudProfiles();
+        if (typeof fetch !== "function") {
+          showToast("Cloud-Sync ist in dieser Umgebung nicht verfÃ¼gbar.");
+          return;
+        }
+
+        try {
+          await loadCloudProfiles();
+          renderCloudProfiles();
+          if (cloudProfile) await loadCloudHistory();
+        } catch {
+          showToast("Cloud-Verbindung nicht bereit. Supabase-Tabelle prÃ¼fen.");
+        }
+      }
+
+      async function loadCloudProfiles() {
+        const profiles = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,created_at&order=name.asc");
+        cloudProfiles = Array.isArray(profiles) ? profiles : [];
+        if (cloudProfile) {
+          cloudProfile = cloudProfiles.find(profile => profile.id === cloudProfile.id) || null;
+          saveCloudProfile();
+        }
+      }
+
+      function renderCloudProfiles() {
+        const options = [
+          `<option value="">Nur lokal</option>`,
+          ...cloudProfiles.map(profile => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`)
+        ];
+        ids.cloudProfileSelect.innerHTML = options.join("");
+        ids.cloudProfileSelect.value = cloudProfile?.id || "";
+      }
+
+      async function createCloudProfile() {
+        const name = ids.cloudProfileName.value.trim();
+        if (!name) {
+          showToast("Profilname fehlt.");
+          return;
+        }
+
+        try {
+          const [profile] = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,created_at", {
+            method: "POST",
+            headers: { Prefer: "return=representation" },
+            body: JSON.stringify({ name })
+          });
+          cloudProfile = profile;
+          ids.cloudProfileName.value = "";
+          await loadCloudProfiles();
+          renderCloudProfiles();
+          saveCloudProfile();
+          await pushLocalHistoryToCloud();
+          showToast(`Cloud-Profil ${name} aktiv.`);
+        } catch {
+          showToast("Cloud-Profil konnte nicht angelegt werden.");
+        }
+      }
+
+      async function loadCloudHistory() {
+        if (!cloudProfile) return;
+        try {
+          const rows = await supabaseRequest(`/rest/v1/battle_results?select=id,created_at,custom_title,inputs,outputs&profile_id=eq.${encodeURIComponent(cloudProfile.id)}&order=created_at.desc&limit=${HISTORY_LIMIT}`);
+          historyEntries = rows.map(row => ({
+            id: row.id,
+            createdAt: row.created_at,
+            customTitle: row.custom_title || "",
+            inputs: normalizeImportedInputs(row.inputs),
+            outputs: row.outputs
+          })).filter(entry => entry.inputs && entry.outputs);
+          saveHistory();
+          compareSelection = compareSelection.filter(id => historyEntries.some(entry => entry.id === id));
+          openHistoryId = historyEntries[0]?.id || null;
+          renderHistory();
+          showToast(`Cloud-Profil ${cloudProfile.name} geladen.`);
+        } catch {
+          showToast("Cloud-Historie konnte nicht geladen werden.");
+        }
+      }
+
+      async function pushLocalHistoryToCloud() {
+        if (!cloudProfile || !historyEntries.length) return;
+        await Promise.all(historyEntries.map(entry => syncCloudEntry(entry, { silent: true })));
+      }
+
+      async function syncCloudEntry(entry, options = {}) {
+        if (!cloudProfile || typeof fetch !== "function") return;
+        try {
+          await supabaseRequest("/rest/v1/battle_results", {
+            method: "POST",
+            headers: { Prefer: "resolution=merge-duplicates" },
+            body: JSON.stringify({
+              id: entry.id,
+              profile_id: cloudProfile.id,
+              created_at: entry.createdAt,
+              custom_title: entry.customTitle || "",
+              inputs: entry.inputs,
+              outputs: entry.outputs
+            })
+          });
+        } catch {
+          if (!options.silent) showToast("Cloud-Speichern fehlgeschlagen.");
+        }
+      }
+
+      async function deleteCloudEntry(id) {
+        if (!cloudProfile || typeof fetch !== "function") return;
+        try {
+          await supabaseRequest(`/rest/v1/battle_results?id=eq.${encodeURIComponent(id)}&profile_id=eq.${encodeURIComponent(cloudProfile.id)}`, {
+            method: "DELETE"
+          });
+        } catch {
+          showToast("Cloud-LÃ¶schen fehlgeschlagen.");
+        }
+      }
+
+      async function clearCloudHistory() {
+        if (!cloudProfile || typeof fetch !== "function") return;
+        try {
+          await supabaseRequest(`/rest/v1/battle_results?profile_id=eq.${encodeURIComponent(cloudProfile.id)}`, {
+            method: "DELETE"
+          });
+        } catch {
+          showToast("Cloud-Historie konnte nicht gelÃ¶scht werden.");
+        }
+      }
+
+      async function supabaseRequest(path, options = {}) {
+        const response = await fetch(`${SUPABASE_URL}${path}`, {
+          ...options,
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+          }
+        });
+        if (!response.ok) throw new Error(`Supabase ${response.status}`);
+        if (response.status === 204) return null;
+        const text = await response.text();
+        return text ? JSON.parse(text) : null;
+      }
+
+      function loadCloudProfile() {
+        try {
+          const raw = localStorage.getItem(CLOUD_PROFILE_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function saveCloudProfile() {
+        try {
+          if (cloudProfile) localStorage.setItem(CLOUD_PROFILE_KEY, JSON.stringify(cloudProfile));
+          else localStorage.removeItem(CLOUD_PROFILE_KEY);
         } catch {}
       }
 
@@ -2873,6 +3179,8 @@
         if (!inputs || typeof inputs !== "object") return null;
         return {
           ...inputs,
+          hitReroll: inputs.hitReroll || "none",
+          woundReroll: inputs.woundReroll || "none",
           preDamage: {
             enabled: Boolean(inputs.preDamage?.enabled),
             value: Number(inputs.preDamage?.value || 0)
@@ -3041,7 +3349,7 @@
         const title = buildHistoryTitle(entry, index);
         return `
           <article class="card history-card">
-            <details class="history-details" ${openHistoryId === entry.id ? "open" : ""}>
+            <details class="history-details" data-history-id="${entry.id}" ${openHistoryId === entry.id ? "open" : ""}>
               <summary>
                 <div class="history-head">
                   <div>
