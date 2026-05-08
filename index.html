@@ -191,15 +191,15 @@
     }
 
     .army-compare-results-shell {
-      display: none;
+      display: none !important;
     }
 
     .compare-results-mode .normal-results-shell {
-      display: none;
+      display: none !important;
     }
 
     .compare-results-mode .army-compare-results-shell {
-      display: grid;
+      display: grid !important;
     }
 
     .input-collapsed > .card-title {
@@ -2196,6 +2196,10 @@
           await renderArmyCompareEnemyFilters();
         });
 
+        ids.armyCompareOwnRoster.addEventListener("change", async () => {
+          await renderArmyCompareEnemyFilters();
+        });
+
         ids.armyCompareRunBtn.addEventListener("click", async () => {
           await runArmyCompare();
         });
@@ -2836,7 +2840,8 @@
       }
 
       function combineWeaponOutputs(weaponDataList) {
-        const weaponOutputs = weaponDataList.map((data, index) => ({
+        const orderedWeaponDataList = sortWeaponDataByAttackPhase(weaponDataList);
+        const weaponOutputs = orderedWeaponDataList.map((data, index) => ({
           data: { ...data, armyWeaponName: data.armyWeaponName || `Waffe ${index + 1}` },
           outputs: calculateAll(data)
         }));
@@ -2849,9 +2854,9 @@
 
         const unsaved = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.unsaved), [1]);
         const damage = weaponOutputs.reduce((current, item) => convolveScalar(current, item.outputs.distributions.damage || [1]), [1]);
-        const targetProfile = weaponDataList.find(data => data.targetProfile)?.targetProfile || null;
-        const preDamage = weaponDataList[0]?.preDamage || { enabled: false, value: 0 };
-        const killResults = targetProfile ? buildSequentialKillResults(weaponDataList, targetProfile, preDamage) : null;
+        const targetProfile = orderedWeaponDataList.find(data => data.targetProfile)?.targetProfile || null;
+        const preDamage = orderedWeaponDataList[0]?.preDamage || { enabled: false, value: 0 };
+        const killResults = targetProfile ? buildSequentialKillResults(orderedWeaponDataList, targetProfile, preDamage) : null;
 
         return {
           expected,
@@ -2870,6 +2875,19 @@
           },
           killResults
         };
+      }
+
+      function sortWeaponDataByAttackPhase(weaponDataList) {
+        return weaponDataList
+          .map((weapon, index) => ({ weapon, index }))
+          .sort((a, b) => weaponDataAttackPhaseRank(a.weapon) - weaponDataAttackPhaseRank(b.weapon) || a.index - b.index)
+          .map(item => item.weapon);
+      }
+
+      function weaponDataAttackPhaseRank(weapon) {
+        if (weapon.attackPhase === "melee") return 1;
+        if (weapon.attackPhase === "ranged") return 0;
+        return 0;
       }
 
       function buildSequentialKillResults(weaponDataList, targetProfile, preDamage) {
@@ -4622,44 +4640,66 @@
       }
 
       async function renderArmyCompareEnemyFilters() {
-        const units = await loadArmyUnits(ids.armyCompareEnemyRoster.value);
-        ids.armyCompareEnemyFilters.innerHTML = units.length
-          ? units.map(unit => `
-              <div class="list-row">
-                <span>
-                  <strong>${escapeHtml(unit.name)}</strong><br />
-                  <small>${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(unit.wounds_per_model || "-")} LP</small>
-                </span>
-                <label class="toggle-label">
-                  <input type="checkbox" data-army-compare-filter="ranged" value="${escapeHtml(unit.id)}" checked />
-                  Fernkampf
-                </label>
-                <label class="toggle-label">
-                  <input type="checkbox" data-army-compare-filter="melee" value="${escapeHtml(unit.id)}" checked />
-                  Nahkampf
-                </label>
-                <label class="toggle-label">
-                  <input type="checkbox" data-army-compare-filter="defense" value="${escapeHtml(unit.id)}" checked />
-                  Verteidigung
-                </label>
+        const [ownUnits, enemyUnits] = await Promise.all([
+          loadArmyUnits(ids.armyCompareOwnRoster.value),
+          loadArmyUnits(ids.armyCompareEnemyRoster.value)
+        ]);
+        if (!ownUnits.length || !enemyUnits.length) {
+          ids.armyCompareEnemyFilters.innerHTML = `<div class="list-row"><span>Bitte eigene und gegnerische Armee mit Einheiten auswählen.</span></div>`;
+          return;
+        }
+
+        ids.armyCompareEnemyFilters.innerHTML = ownUnits.map((ownUnit, index) => `
+          <details class="mini-details" ${index === 0 ? "open" : ""}>
+            <summary>
+              <div class="summary-head">
+                <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(ownUnit.name)}</span>
+                <span class="section-summary-text">Ziele und Bedrohungen</span>
               </div>
-            `).join("")
-          : `<div class="list-row"><span>Keine gegnerischen Einheiten gefunden.</span></div>`;
+            </summary>
+            <div class="mini-details-body list-stack">
+              ${enemyUnits.map(enemyUnit => `
+                <div class="list-row">
+                  <span>
+                    <strong>${escapeHtml(enemyUnit.name)}</strong><br />
+                    <small>${escapeHtml(enemyUnit.model_count)} Modelle, W${escapeHtml(enemyUnit.toughness || "-")}, ${escapeHtml(enemyUnit.wounds_per_model || "-")} LP</small>
+                  </span>
+                  <label class="toggle-label">
+                    <input type="checkbox" data-army-compare-filter="ranged" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
+                    Fernkampf
+                  </label>
+                  <label class="toggle-label">
+                    <input type="checkbox" data-army-compare-filter="melee" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
+                    Nahkampf
+                  </label>
+                  <label class="toggle-label">
+                    <input type="checkbox" data-army-compare-filter="defense" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
+                    Verteidigung
+                  </label>
+                </div>
+              `).join("")}
+            </div>
+          </details>
+        `).join("");
       }
 
-      function readArmyCompareEnemyFilters(enemyUnits) {
+      function readArmyCompareEnemyFilters(ownUnits, enemyUnits) {
         const fallbackIds = new Set(enemyUnits.map(unit => unit.id));
-        const readSet = type => {
-          const checked = Array.from(ids.armyCompareEnemyFilters.querySelectorAll(`input[data-army-compare-filter="${type}"]:checked`)).map(input => input.value);
-          return checked.length || ids.armyCompareEnemyFilters.querySelector(`[data-army-compare-filter="${type}"]`)
-            ? new Set(checked)
-            : new Set(fallbackIds);
-        };
-        return {
-          ranged: readSet("ranged"),
-          melee: readSet("melee"),
-          defense: readSet("defense")
-        };
+        const byOwn = new Map();
+        ownUnits.forEach(ownUnit => {
+          const readSet = type => {
+            const selector = `input[data-army-compare-filter="${type}"][data-own-unit="${cssEscape(ownUnit.id)}"]`;
+            const inputs = Array.from(ids.armyCompareEnemyFilters.querySelectorAll(selector));
+            if (!inputs.length) return new Set(fallbackIds);
+            return new Set(inputs.filter(input => input.checked).map(input => input.value));
+          };
+          byOwn.set(ownUnit.id, {
+            ranged: readSet("ranged"),
+            melee: readSet("melee"),
+            defense: readSet("defense")
+          });
+        });
+        return { byOwn, fallbackIds };
       }
 
       async function importArmyRosterFile(file) {
@@ -4904,15 +4944,19 @@
           const allUnits = [...ownUnits, ...enemyUnits];
           await Promise.all(allUnits.map(unit => loadArmyWeapons(unit.id)));
 
-          const filters = readArmyCompareEnemyFilters(enemyUnits);
-          const enemyThreatUnits = enemyUnits.filter(unit => filters.defense.has(unit.id));
+          const filters = readArmyCompareEnemyFilters(ownUnits, enemyUnits);
           const ownAttacks = analyzeArmyMatchups(ownUnits, enemyUnits, {
-            defenderIdsByMode: {
-              ranged: filters.ranged,
-              melee: filters.melee
+            allowPair: (attacker, defender, mode) => {
+              const unitFilters = filters.byOwn.get(attacker.id);
+              return unitFilters ? unitFilters[mode].has(defender.id) : filters.fallbackIds.has(defender.id);
             }
           });
-          const enemyAttacks = analyzeArmyMatchups(enemyThreatUnits, ownUnits);
+          const enemyAttacks = analyzeArmyMatchups(enemyUnits, ownUnits, {
+            allowPair: (attacker, defender) => {
+              const unitFilters = filters.byOwn.get(defender.id);
+              return unitFilters ? unitFilters.defense.has(attacker.id) : filters.fallbackIds.has(attacker.id);
+            }
+          });
           const summary = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
           const entry = {
             id: createId(),
@@ -4945,8 +4989,7 @@
           const byMode = { ranged: [], melee: [] };
           defenders.forEach(defender => {
             ["ranged", "melee"].forEach(mode => {
-              const allowedDefenders = options.defenderIdsByMode?.[mode];
-              if (allowedDefenders && !allowedDefenders.has(defender.id)) return;
+              if (options.allowPair && !options.allowPair(attacker, defender, mode)) return;
               const result = calculateUnitAttackMode(attacker, defender, mode);
               if (result) byMode[mode].push(result);
             });
@@ -4958,12 +5001,13 @@
 
       function calculateUnitAttackMode(attacker, defender, mode) {
         const weapons = (armyWeaponsByUnit.get(attacker.id) || []).filter(weapon => weaponMatchesAttackMode(weapon, mode));
-        const selectedWeapons = selectBestWeaponOptions(attacker, defender, weapons);
+        const selectedWeapons = sortWeaponsByAttackPhase(selectBestWeaponOptions(attacker, defender, weapons));
         if (!selectedWeapons.length) return null;
 
         const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }));
         if (weaponEntries.some(entry => !entry.ok)) return null;
-        const outputs = combineWeaponOutputs(weaponEntries.map(entry => entry.data));
+        const weaponDataList = sortWeaponDataByAttackPhase(weaponEntries.map(entry => entry.data));
+        const outputs = combineWeaponOutputs(weaponDataList);
         return {
           attacker,
           defender,
@@ -4982,6 +5026,17 @@
         const range = String(weapon.range_text || "").toLowerCase();
         const melee = type.includes("nahkampf") || type.includes("melee") || range.includes("nahkampf") || range.includes("melee");
         return mode === "melee" ? melee : !melee;
+      }
+
+      function sortWeaponsByAttackPhase(weapons) {
+        return weapons
+          .map((weapon, index) => ({ weapon, index }))
+          .sort((a, b) => weaponAttackPhaseRank(a.weapon) - weaponAttackPhaseRank(b.weapon) || a.index - b.index)
+          .map(item => item.weapon);
+      }
+
+      function weaponAttackPhaseRank(weapon) {
+        return weaponMatchesAttackMode(weapon, "melee") ? 1 : 0;
       }
 
       function selectBestWeaponOptions(attacker, defender, weapons) {
@@ -5568,7 +5623,7 @@
         const target = targetUnits.find(unit => unit.id === ids.armyTargetUnit.value);
         const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
         const selectedIds = Array.from(ids.armyWeaponList.querySelectorAll("input[type='checkbox']:checked")).map(input => input.value);
-        const selectedWeapons = weapons.filter(weapon => selectedIds.includes(weapon.id));
+        const selectedWeapons = sortWeaponsByAttackPhase(weapons.filter(weapon => selectedIds.includes(weapon.id)));
         const specialErrors = [];
         const specialRules = collectSpecialRuleData(specialErrors, true);
 
@@ -5591,11 +5646,12 @@
 
         const weaponDataList = weaponEntries.map(entry => entry.data);
         const outputs = combineWeaponOutputs(weaponDataList);
+        const orderedWeaponDataList = sortWeaponDataByAttackPhase(weaponDataList);
         const newEntry = {
           id: createId(),
           createdAt: new Date().toISOString(),
           customTitle: `${attacker.name} → ${target.name}`,
-          inputs: buildArmyHistoryInputs(attacker, target, selectedWeapons, weaponDataList),
+          inputs: buildArmyHistoryInputs(attacker, target, selectedWeapons, orderedWeaponDataList),
           outputs
         };
 
@@ -5657,7 +5713,8 @@
             modelCount: Number(target.model_count || 1),
             woundsPerModel: Number(target.wounds_per_model || 1)
           },
-          armyWeaponName: cleanWeaponName(weapon.name)
+          armyWeaponName: cleanWeaponName(weapon.name),
+          attackPhase: weaponMatchesAttackMode(weapon, "melee") ? "melee" : "ranged"
         };
 
         applyArmySpecialRuleData(data, options.specialRules);
@@ -5708,9 +5765,13 @@
           armySelection: {
             attacker: attacker.name,
             target: target.name,
-            weapons: weapons.map(weapon => `${weapon.count}x ${cleanWeaponName(weapon.name)}`)
+            weapons: weaponDataList.map(weapon => `${labelAttackPhase(weapon.attackPhase)}: ${weapon.armyWeaponName || "Waffe"}`)
           }
         };
+      }
+
+      function labelAttackPhase(phase) {
+        return phase === "melee" ? "Nahkampf" : "Fernkampf";
       }
 
       function parseAttackMode(value, count) {
