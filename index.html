@@ -4450,7 +4450,7 @@
           });
           const enemyAttacks = analyzeArmyMatchups(enemyThreatUnits, ownUnits);
           ids.armyCompareResults.innerHTML = renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks);
-          ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden je Kategorie die TOP3 nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
+          ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
         } catch {
           ids.armyCompareStatus.textContent = "Armee-Vergleich konnte nicht berechnet werden.";
         }
@@ -4607,7 +4607,7 @@
           b.killProbability - a.killProbability ||
           b.reliableDamage - a.reliableDamage ||
           b.expectedDamage - a.expectedDamage
-        ).slice(0, 3);
+        );
         return `
           <div class="mini-card">
             <details class="mini-details">
