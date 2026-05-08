@@ -5296,13 +5296,9 @@
 
       function calculateUnitAttackMode(attacker, defender, mode, probabilityTarget = 0.65) {
         const weapons = (armyWeaponsByUnit.get(attacker.id) || []).filter(weapon => weaponMatchesAttackMode(weapon, mode));
-        const selectedWeapons = sortWeaponsByAttackPhase(selectBestWeaponOptions(attacker, defender, weapons, mode));
-        if (!selectedWeapons.length) return null;
-
-        const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }));
-        if (weaponEntries.some(entry => !entry.ok)) return null;
-        const weaponDataList = sortWeaponDataByAttackPhase(weaponEntries.map(entry => entry.data));
-        const outputs = combineWeaponOutputs(weaponDataList);
+        const bestLoadout = selectBestWeaponLoadout(attacker, defender, weapons, mode, probabilityTarget);
+        if (!bestLoadout) return null;
+        const { selectedWeapons, outputs } = bestLoadout;
         const effectiveDamageDistribution = outputs.killResults?.effectiveDamageDistribution || outputs.distributions.damage;
         const reliableEffectiveDamage = reliableDamageAt(effectiveDamageDistribution, probabilityTarget);
         const expectedEffectiveDamage = outputs.killResults?.expectedEffectiveDamage ?? outputs.expected.damage;
@@ -5339,7 +5335,7 @@
         return weaponMatchesAttackMode(weapon, "melee") ? 1 : 0;
       }
 
-      function selectBestWeaponOptions(attacker, defender, weapons, mode = "ranged") {
+      function selectBestWeaponLoadout(attacker, defender, weapons, mode = "ranged", probabilityTarget = 0.65) {
         const groups = new Map();
         weapons.forEach(weapon => {
           const key = weaponOptionGroupKey(weapon);
@@ -5347,34 +5343,73 @@
           groups.get(key).push(weapon);
         });
 
-        const selected = [];
-        groups.forEach(groupWeapons => {
-          if (groupWeapons.length === 1) {
-            const entry = buildArmyWeaponCalculation(attacker, defender, groupWeapons[0], { useCurrentFnp: false });
-            if (entry.ok) selected.push(groupWeapons[0]);
-            return;
-          }
-          const ranked = groupWeapons
-            .map(weapon => {
-              const entry = buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false });
-              return { weapon, damage: entry.ok ? entry.outputs.expected.damage : -1 };
-            })
-            .sort((a, b) => b.damage - a.damage);
-          if (ranked[0]?.damage >= 0) selected.push(ranked[0].weapon);
+        const choices = Array.from(groups.values())
+          .map(groupWeapons => groupWeapons
+            .map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }))
+            .filter(entry => entry.ok)
+          )
+          .filter(groupEntries => groupEntries.length);
+        if (!choices.length) return null;
+
+        const combinations = buildWeaponEntryCombinations(choices);
+        let best = null;
+        combinations.forEach(combination => {
+          buildPistolCompatibleEntrySets(combination, mode).forEach(entries => {
+            const weaponDataList = sortWeaponDataByAttackPhase(entries.map(entry => entry.data));
+            const outputs = combineWeaponOutputs(weaponDataList);
+            const effectiveDamageDistribution = outputs.killResults?.effectiveDamageDistribution || outputs.distributions.damage;
+            const reliableDamage = reliableDamageAt(effectiveDamageDistribution, probabilityTarget);
+            const expectedEffectiveDamage = outputs.killResults?.expectedEffectiveDamage ?? outputs.expected.damage;
+            const candidate = {
+              selectedWeapons: entries.map(entry => entry.weapon),
+              outputs,
+              reliableDamage,
+              reliableDamageRatio: reliableDamageRatio(effectiveDamageDistribution, defender, probabilityTarget),
+              killProbability: defenderDestroyedProbability(outputs, defender),
+              expectedEffectiveDamage
+            };
+            if (!best || compareArmyLoadoutCandidate(candidate, best) > 0) best = candidate;
+          });
         });
-        return mode === "ranged" ? choosePistolCompatibleWeapons(attacker, defender, selected) : selected;
+        return best;
+      }
+
+      function buildWeaponEntryCombinations(choices) {
+        return choices.reduce((current, groupEntries) => {
+          const next = [];
+          current.forEach(prefix => {
+            groupEntries.forEach(entry => next.push([...prefix, entry]));
+          });
+          return next;
+        }, [[]]);
+      }
+
+      function buildPistolCompatibleEntrySets(entries, mode) {
+        if (mode !== "ranged") return [entries];
+        const pistols = entries.filter(entry => isPistolWeapon(entry.weapon));
+        const nonPistols = entries.filter(entry => !isPistolWeapon(entry.weapon));
+        if (!pistols.length || !nonPistols.length) return [entries];
+        return [pistols, nonPistols].filter(group => group.length);
+      }
+
+      function compareArmyLoadoutCandidate(a, b) {
+        const checks = [
+          a.reliableDamageRatio - b.reliableDamageRatio,
+          a.killProbability - b.killProbability,
+          a.reliableDamage - b.reliableDamage,
+          a.expectedEffectiveDamage - b.expectedEffectiveDamage
+        ];
+        return checks.find(value => Math.abs(value) > EPSILON) || 0;
+      }
+
+      function selectBestWeaponOptions(attacker, defender, weapons, mode = "ranged") {
+        const loadout = selectBestWeaponLoadout(attacker, defender, weapons, mode, 0.65);
+        return loadout ? loadout.selectedWeapons : [];
       }
 
       function choosePistolCompatibleWeapons(attacker, defender, weapons) {
-        const pistols = weapons.filter(isPistolWeapon);
-        const nonPistols = weapons.filter(weapon => !isPistolWeapon(weapon));
-        if (!pistols.length || !nonPistols.length) return weapons;
-        const score = group => {
-          const entries = group.map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }));
-          if (entries.some(entry => !entry.ok)) return -1;
-          return combineWeaponOutputs(entries.map(entry => entry.data)).expected.damage;
-        };
-        return score(pistols) > score(nonPistols) ? pistols : nonPistols;
+        const loadout = selectBestWeaponLoadout(attacker, defender, weapons, "ranged", 0.65);
+        return loadout ? loadout.selectedWeapons : weapons;
       }
 
       function isPistolWeapon(weapon) {
