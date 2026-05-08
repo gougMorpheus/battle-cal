@@ -38,6 +38,7 @@ create table if not exists public.army_weapons (
   id text primary key,
   roster_id text not null references public.army_rosters(id) on delete cascade,
   unit_id text not null references public.army_units(id) on delete cascade,
+  model_id text,
   name text not null,
   weapon_type text not null default '',
   weapon_role text not null default 'weapon',
@@ -57,6 +58,9 @@ create table if not exists public.army_weapons (
 alter table public.army_weapons
   add column if not exists weapon_role text not null default 'weapon';
 
+alter table public.army_weapons
+  add column if not exists model_id text;
+
 update public.army_weapons
   set weapon_role = 'profile'
   where weapon_role = 'weapon'
@@ -70,6 +74,9 @@ create index if not exists army_rosters_profile_name_idx
 
 create index if not exists army_weapons_unit_name_idx
   on public.army_weapons (unit_id, name);
+
+create index if not exists army_weapons_model_idx
+  on public.army_weapons (model_id);
 
 alter table public.army_rosters enable row level security;
 alter table public.army_units enable row level security;

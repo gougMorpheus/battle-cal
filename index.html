@@ -1601,9 +1601,15 @@
               <select id="armyEditorAttachedUnit"></select>
             </div>
           </div>
+          <div class="field">
+            <label for="armyEditorModelSelect">Modellprofil</label>
+            <select id="armyEditorModelSelect"></select>
+          </div>
           <div class="button-row core-actions">
             <button type="button" id="armyEditorNewUnitBtn">Neue Einheit</button>
+            <button type="button" id="armyEditorNewModelBtn">Neues Modellprofil</button>
             <button type="button" id="armyEditorSaveUnitBtn" class="primary">Einheit speichern</button>
+            <button type="button" id="armyEditorDeleteModelBtn" class="warn">Modellprofil löschen</button>
             <button type="button" id="armyEditorDeleteUnitBtn" class="warn">Einheit löschen</button>
           </div>
         </section>
@@ -1620,6 +1626,10 @@
             <div class="field">
               <label for="armyEditorWeaponName">Name</label>
               <input id="armyEditorWeaponName" type="text" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponModel">Gehört zu Modell</label>
+              <select id="armyEditorWeaponModel"></select>
             </div>
           </div>
           <div class="grid two">
@@ -1814,6 +1824,7 @@
         armyEditorDeleteRosterBtn: document.getElementById("armyEditorDeleteRosterBtn"),
         armyEditorUnitSelect: document.getElementById("armyEditorUnitSelect"),
         armyEditorUnitName: document.getElementById("armyEditorUnitName"),
+        armyEditorModelSelect: document.getElementById("armyEditorModelSelect"),
         armyEditorModelCount: document.getElementById("armyEditorModelCount"),
         armyEditorToughness: document.getElementById("armyEditorToughness"),
         armyEditorSave: document.getElementById("armyEditorSave"),
@@ -1823,10 +1834,13 @@
         armyEditorProfileName: document.getElementById("armyEditorProfileName"),
         armyEditorAttachedUnit: document.getElementById("armyEditorAttachedUnit"),
         armyEditorNewUnitBtn: document.getElementById("armyEditorNewUnitBtn"),
+        armyEditorNewModelBtn: document.getElementById("armyEditorNewModelBtn"),
         armyEditorSaveUnitBtn: document.getElementById("armyEditorSaveUnitBtn"),
+        armyEditorDeleteModelBtn: document.getElementById("armyEditorDeleteModelBtn"),
         armyEditorDeleteUnitBtn: document.getElementById("armyEditorDeleteUnitBtn"),
         armyEditorWeaponSelect: document.getElementById("armyEditorWeaponSelect"),
         armyEditorWeaponName: document.getElementById("armyEditorWeaponName"),
+        armyEditorWeaponModel: document.getElementById("armyEditorWeaponModel"),
         armyEditorWeaponType: document.getElementById("armyEditorWeaponType"),
         armyEditorWeaponRole: document.getElementById("armyEditorWeaponRole"),
         armyEditorWeaponCount: document.getElementById("armyEditorWeaponCount"),
@@ -1915,6 +1929,8 @@
       let armyWeaponsByUnit = new Map();
       let armyWeaponRoleAvailable = true;
       let armyUnitInvulnerableSaveAvailable = true;
+      let armyEditorModelProfiles = [];
+      let armyEditorSelectedModelId = "";
       let manualWeaponInputs = [];
 
       initSelects();
@@ -2275,6 +2291,12 @@
           await loadSelectedArmyEditorUnit();
         });
 
+        ids.armyEditorModelSelect.addEventListener("change", () => {
+          armyEditorSelectedModelId = ids.armyEditorModelSelect.value;
+          loadSelectedArmyEditorModel();
+          renderArmyEditorWeaponModelSelect();
+        });
+
         ids.armyEditorWeaponSelect.addEventListener("change", () => {
           loadSelectedArmyEditorWeapon();
         });
@@ -2291,8 +2313,16 @@
           clearArmyEditorUnitForm();
         });
 
+        ids.armyEditorNewModelBtn.addEventListener("click", () => {
+          clearArmyEditorModelForm();
+        });
+
         ids.armyEditorSaveUnitBtn.addEventListener("click", async () => {
           await saveArmyEditorUnit();
+        });
+
+        ids.armyEditorDeleteModelBtn.addEventListener("click", () => {
+          deleteSelectedArmyEditorModel();
         });
 
         ids.armyEditorDeleteUnitBtn.addEventListener("click", async () => {
@@ -5717,13 +5747,18 @@
           return;
         }
         ids.armyEditorUnitName.value = unit.name || "";
-        ids.armyEditorModelCount.value = String(unit.model_count || 1);
-        ids.armyEditorToughness.value = unit.toughness ? String(unit.toughness) : "";
-        ids.armyEditorSave.value = unit.save ? String(unit.save) : "";
-        ids.armyEditorInvulnerableSave.value = unit.invulnerable_save ? String(unit.invulnerable_save) : "";
-        ids.armyEditorWounds.value = unit.wounds_per_model ? String(unit.wounds_per_model) : "";
-        ids.armyEditorObjectiveControl.value = unit.objective_control || unit.objective_control === 0 ? String(unit.objective_control) : "";
-        ids.armyEditorProfileName.value = unit.profile_name || "";
+        armyEditorModelProfiles = getUnitModelProfiles(unit).map((profile, index) => ({
+          id: profile.id || profile.model_id || `model-${index + 1}`,
+          name: profile.name || unit.profile_name || unit.name,
+          count: Number(profile.count || 1),
+          toughness: profile.toughness || unit.toughness || null,
+          save: profile.save || unit.save || null,
+          invulnerable_save: profile.invulnerable_save || unit.invulnerable_save || null,
+          wounds_per_model: profile.wounds_per_model || unit.wounds_per_model || 1,
+          objective_control: profile.objective_control ?? unit.objective_control ?? null
+        }));
+        renderArmyEditorModelSelect();
+        loadSelectedArmyEditorModel();
         renderArmyEditorAttachedUnitSelect(units, unit);
         await refreshArmyEditorWeapons();
       }
@@ -5738,8 +5773,92 @@
         ids.armyEditorWounds.value = "";
         ids.armyEditorObjectiveControl.value = "";
         ids.armyEditorProfileName.value = "";
+        armyEditorModelProfiles = [];
+        renderArmyEditorModelSelect();
         renderArmyEditorAttachedUnitSelect(armyUnitsByRoster.get(ids.armyEditorRosterSelect.value) || [], null);
         clearArmyEditorWeaponList();
+      }
+
+      function renderArmyEditorModelSelect() {
+        ids.armyEditorModelSelect.innerHTML = armyEditorModelProfiles.length
+          ? armyEditorModelProfiles.map(profile => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)} (${escapeHtml(profile.count)}x)</option>`).join("")
+          : `<option value="">Neues Modellprofil</option>`;
+        restoreSelectValue(ids.armyEditorModelSelect, armyEditorSelectedModelId, armyEditorModelProfiles[0]?.id || "");
+        armyEditorSelectedModelId = ids.armyEditorModelSelect.value;
+        renderArmyEditorWeaponModelSelect();
+      }
+
+      function renderArmyEditorWeaponModelSelect() {
+        ids.armyEditorWeaponModel.innerHTML = armyEditorModelProfiles.length
+          ? armyEditorModelProfiles.map(profile => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`).join("")
+          : `<option value="">Kein Modellprofil</option>`;
+      }
+
+      function loadSelectedArmyEditorModel() {
+        const model = armyEditorModelProfiles.find(profile => profile.id === armyEditorSelectedModelId);
+        if (!model) {
+          clearArmyEditorModelForm();
+          return;
+        }
+        ids.armyEditorProfileName.value = model.name || "";
+        ids.armyEditorModelCount.value = String(model.count || 1);
+        ids.armyEditorToughness.value = model.toughness ? String(model.toughness) : "";
+        ids.armyEditorSave.value = model.save ? String(model.save) : "";
+        ids.armyEditorInvulnerableSave.value = model.invulnerable_save ? String(model.invulnerable_save) : "";
+        ids.armyEditorWounds.value = model.wounds_per_model ? String(model.wounds_per_model) : "";
+        ids.armyEditorObjectiveControl.value = model.objective_control || model.objective_control === 0 ? String(model.objective_control) : "";
+      }
+
+      function clearArmyEditorModelForm() {
+        armyEditorSelectedModelId = "";
+        ids.armyEditorModelSelect.value = "";
+        ids.armyEditorProfileName.value = "";
+        ids.armyEditorModelCount.value = "1";
+        ids.armyEditorToughness.value = "";
+        ids.armyEditorSave.value = "";
+        ids.armyEditorInvulnerableSave.value = "";
+        ids.armyEditorWounds.value = "";
+        ids.armyEditorObjectiveControl.value = "";
+      }
+
+      function deleteSelectedArmyEditorModel() {
+        if (!armyEditorSelectedModelId) return;
+        armyEditorModelProfiles = armyEditorModelProfiles.filter(profile => profile.id !== armyEditorSelectedModelId);
+        armyEditorSelectedModelId = armyEditorModelProfiles[0]?.id || "";
+        renderArmyEditorModelSelect();
+        loadSelectedArmyEditorModel();
+      }
+
+      function collectArmyEditorModelProfile() {
+        const name = ids.armyEditorProfileName.value.trim() || ids.armyEditorUnitName.value.trim();
+        const count = parsePositiveInt(ids.armyEditorModelCount.value);
+        const toughness = parsePositiveInt(ids.armyEditorToughness.value);
+        const save = ids.armyEditorSave.value === "" ? null : parseBoundedInt(ids.armyEditorSave.value, 2, 6);
+        const invulnerableSave = ids.armyEditorInvulnerableSave.value === "" ? null : parseBoundedInt(ids.armyEditorInvulnerableSave.value, 2, 6);
+        const wounds = parsePositiveInt(ids.armyEditorWounds.value);
+        const objectiveControl = ids.armyEditorObjectiveControl.value === "" ? null : parsePositiveInt(ids.armyEditorObjectiveControl.value);
+        if (!name || count === null || toughness === null || wounds === null || (ids.armyEditorSave.value !== "" && save === null) || (ids.armyEditorInvulnerableSave.value !== "" && invulnerableSave === null) || (ids.armyEditorObjectiveControl.value !== "" && objectiveControl === null)) {
+          return null;
+        }
+        return {
+          id: armyEditorSelectedModelId || `model-${createId()}`,
+          name,
+          count,
+          toughness,
+          save,
+          invulnerable_save: invulnerableSave,
+          wounds_per_model: wounds,
+          objective_control: objectiveControl
+        };
+      }
+
+      function upsertArmyEditorModelProfile(profile) {
+        const existingIndex = armyEditorModelProfiles.findIndex(item => item.id === profile.id);
+        if (existingIndex >= 0) armyEditorModelProfiles[existingIndex] = profile;
+        else armyEditorModelProfiles.push(profile);
+        armyEditorSelectedModelId = profile.id;
+        renderArmyEditorModelSelect();
+        return armyEditorModelProfiles.slice();
       }
 
       function renderArmyEditorAttachedUnitSelect(units, currentUnit) {
@@ -5773,6 +5892,7 @@
           return;
         }
         ids.armyEditorWeaponName.value = cleanWeaponName(weapon.name || "");
+        ids.armyEditorWeaponModel.value = weapon.model_id || weapon.raw_profile?.__battle_cal_model_id || armyEditorModelProfiles[0]?.id || "";
         ids.armyEditorWeaponType.value = weaponMatchesAttackMode(weapon, "melee") ? "Nahkampfwaffen" : "Fernkampfwaffe";
         ids.armyEditorWeaponRole.value = weapon.weapon_role || weapon.weaponRole || "weapon";
         ids.armyEditorWeaponCount.value = String(weapon.count || 1);
@@ -5788,6 +5908,7 @@
       function clearArmyEditorWeaponForm() {
         ids.armyEditorWeaponSelect.value = "";
         ids.armyEditorWeaponName.value = "";
+        ids.armyEditorWeaponModel.value = armyEditorModelProfiles[0]?.id || "";
         ids.armyEditorWeaponType.value = "Fernkampfwaffe";
         ids.armyEditorWeaponRole.value = "weapon";
         ids.armyEditorWeaponCount.value = "1";
@@ -5892,11 +6013,28 @@
         const existingId = ids.armyEditorUnitSelect.value;
         const nextUnitId = existingId || `manual-unit-${createId()}`;
         const currentUnit = (armyUnitsByRoster.get(rosterId) || []).find(unit => unit.id === existingId);
+        const currentModelProfile = collectArmyEditorModelProfile();
+        if (!currentModelProfile) {
+          showToast("Bitte Modellprofil vollständig und gültig ausfüllen.");
+          return;
+        }
+        const nextModelProfiles = upsertArmyEditorModelProfile(currentModelProfile);
+        const primaryModel = sortModelProfilesForDamageAllocation(nextModelProfiles)[0] || currentModelProfile;
+        const nextModelCount = sumValues(nextModelProfiles, profile => Number(profile.count || 0));
         const nextRawSelection = {
           ...(currentUnit?.raw_selection && typeof currentUnit.raw_selection === "object" ? currentUnit.raw_selection : {}),
+          __battle_cal_model_profiles: nextModelProfiles.map(profile => ({
+            id: profile.id,
+            name: profile.name,
+            count: profile.count,
+            toughness: profile.toughness,
+            save: profile.save,
+            invulnerable_save: profile.invulnerable_save,
+            wounds_per_model: profile.wounds_per_model,
+            objective_control: profile.objective_control
+          })),
           __battle_cal_editor_overrides: {
             ...(currentUnit?.raw_selection?.__battle_cal_editor_overrides || {}),
-            model_count: modelCount,
             attached_unit_id: attachedUnitId || null,
             updatedAt: new Date().toISOString()
           }
@@ -5904,13 +6042,13 @@
         const editablePayload = {
           roster_id: rosterId,
           name,
-          model_count: modelCount,
-          profile_name: profileName,
-          toughness,
-          save,
-          ...(armyUnitInvulnerableSaveAvailable ? { invulnerable_save: invulnerableSave } : {}),
-          wounds_per_model: wounds,
-          objective_control: objectiveControl,
+          model_count: nextModelCount,
+          profile_name: primaryModel.name || profileName,
+          toughness: primaryModel.toughness,
+          save: primaryModel.save,
+          ...(armyUnitInvulnerableSaveAvailable ? { invulnerable_save: primaryModel.invulnerable_save || null } : {}),
+          wounds_per_model: primaryModel.wounds_per_model,
+          objective_control: primaryModel.objective_control,
           raw_selection: nextRawSelection,
           updated_at: new Date().toISOString()
         };
@@ -6035,6 +6173,7 @@
         const rosterId = ids.armyEditorRosterSelect.value;
         const unitId = ids.armyEditorUnitSelect.value;
         const name = ids.armyEditorWeaponName.value.trim();
+        const modelId = ids.armyEditorWeaponModel.value || "";
         const count = parsePositiveInt(ids.armyEditorWeaponCount.value);
         const weaponType = ids.armyEditorWeaponType.value;
         const weaponRole = ids.armyEditorWeaponRole.value;
@@ -6060,6 +6199,7 @@
         const basePayload = {
           roster_id: rosterId,
           unit_id: unitId,
+          model_id: modelId || null,
           name,
           weapon_type: weaponType,
           count,
@@ -6070,7 +6210,7 @@
           ap_text: apText,
           damage_text: damageText,
           keywords,
-          raw_profile: { manual: true, role: weaponRole, updatedAt: new Date().toISOString() },
+          raw_profile: { manual: true, role: weaponRole, __battle_cal_model_id: modelId || null, updatedAt: new Date().toISOString() },
           updated_at: new Date().toISOString()
         };
         const payload = {
@@ -6281,8 +6421,8 @@
       async function loadArmyWeapons(unitId) {
         if (!unitId) return [];
         if (armyWeaponsByUnit.has(unitId)) return armyWeaponsByUnit.get(unitId);
-        const withRolePath = `/rest/v1/army_weapons?select=id,name,weapon_type,weapon_role,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`;
-        const withoutRolePath = `/rest/v1/army_weapons?select=id,name,weapon_type,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`;
+        const withRolePath = `/rest/v1/army_weapons?select=id,name,weapon_type,weapon_role,model_id,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords,raw_profile&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`;
+        const withoutRolePath = `/rest/v1/army_weapons?select=id,name,weapon_type,model_id,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords,raw_profile&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`;
         let weapons = [];
         try {
           weapons = await supabaseRequest(armyWeaponRoleAvailable ? withRolePath : withoutRolePath) || [];
