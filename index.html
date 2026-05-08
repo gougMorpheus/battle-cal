@@ -1089,7 +1089,9 @@
         <div class="menu-section">
           <div class="menu-section-title">Armeen</div>
           <button type="button" id="armyCompareOpenBtn">Armeen vergleichen</button>
+          <button type="button" id="armyImportBtn">Armeeliste importieren</button>
           <button type="button" id="armyEditorOpenBtn">Einheiten bearbeiten</button>
+          <input type="file" id="armyImportFile" accept="application/json,.json" class="hidden" />
         </div>
 
       </div>
@@ -1581,6 +1583,8 @@
         armyCompareRunBtn: document.getElementById("armyCompareRunBtn"),
         armyCompareStatus: document.getElementById("armyCompareStatus"),
         armyCompareResults: document.getElementById("armyCompareResults"),
+        armyImportBtn: document.getElementById("armyImportBtn"),
+        armyImportFile: document.getElementById("armyImportFile"),
         armyEditorOpenBtn: document.getElementById("armyEditorOpenBtn"),
         armyEditorModal: document.getElementById("armyEditorModal"),
         armyEditorCloseBtn: document.getElementById("armyEditorCloseBtn"),
@@ -1823,12 +1827,14 @@
             compareSelection = [];
             openHistoryId = null;
             editingHistoryId = null;
+            await refreshArmyData();
             renderHistory();
             updateSyncStatus();
             showToast("Lokale Historie aktiv.");
             return;
           }
           await loadCloudHistory();
+          await refreshArmyData();
         });
 
         ids.cloudProfileCreateBtn.addEventListener("click", async () => {
@@ -1953,6 +1959,21 @@
 
         ids.armyCompareRunBtn.addEventListener("click", async () => {
           await runArmyCompare();
+        });
+
+        ids.armyImportBtn.addEventListener("click", () => {
+          if (!cloudProfile) {
+            showToast("Bitte zuerst ein Cloud-Profil auswählen oder anlegen.");
+            return;
+          }
+          ids.armyImportFile.click();
+        });
+
+        ids.armyImportFile.addEventListener("change", async event => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          await importArmyRosterFile(file);
+          ids.armyImportFile.value = "";
         });
 
         ids.armyEditorOpenBtn.addEventListener("click", () => {
@@ -4141,6 +4162,207 @@
         ids.armyCompareModal.setAttribute("aria-hidden", "true");
       }
 
+      async function importArmyRosterFile(file) {
+        if (!cloudProfile) {
+          showToast("Bitte zuerst ein Cloud-Profil auswählen oder anlegen.");
+          return;
+        }
+
+        try {
+          closeFloatingMenu();
+          showToast("Armeeliste wird importiert...");
+          const text = await readFileAsText(file);
+          const parsed = JSON.parse(text);
+          const extracted = extractNewRecruitRoster(parsed, file.name);
+          if (!extracted.units.length) {
+            showToast("Keine Einheiten im New-Recruit-Export gefunden.");
+            return;
+          }
+
+          await saveImportedArmyRoster(extracted);
+          await refreshArmyData();
+          ids.armyAttackerRoster.value = extracted.roster.id;
+          ids.armyTargetRoster.value = extracted.roster.id;
+          await renderArmyUnitSelect(extracted.roster.id, ids.armyAttackerUnit);
+          await renderArmyUnitSelect(extracted.roster.id, ids.armyTargetUnit);
+          await renderArmyWeapons();
+          showToast(`${extracted.roster.name} importiert: ${extracted.units.length} Einheiten, ${extracted.weapons.length} Waffen.`);
+        } catch {
+          showToast("Armeeliste konnte nicht importiert werden.");
+        }
+      }
+
+      function extractNewRecruitRoster(parsed, fileName) {
+        const roster = parsed?.roster || parsed;
+        if (!roster || typeof roster !== "object") throw new Error("Invalid roster JSON");
+        const rosterName = roster.name || fileName.replace(/\.json$/i, "");
+        const rosterId = `profile-${cloudProfile.id}-${slugText(rosterName)}`;
+        const units = [];
+        const weapons = [];
+
+        collectTopLevelRosterUnits(roster).forEach(selection => {
+          const extracted = extractRosterUnit(selection, rosterId, fileName);
+          units.push(extracted.unit);
+          weapons.push(...extracted.weapons);
+        });
+
+        return {
+          roster: {
+            id: rosterId,
+            profile_id: cloudProfile.id,
+            name: rosterName,
+            source_file: fileName,
+            catalogue_name: roster.catalogueName || "",
+            game_system_name: roster.gameSystemName || ""
+          },
+          units,
+          weapons
+        };
+      }
+
+      async function saveImportedArmyRoster(extracted) {
+        await supabaseRequest(`/rest/v1/army_rosters?id=eq.${encodeURIComponent(extracted.roster.id)}`, {
+          method: "DELETE"
+        });
+        await supabaseRequest("/rest/v1/army_rosters", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(extracted.roster)
+        });
+        for (const chunk of chunkArray(extracted.units, 100)) {
+          await supabaseRequest("/rest/v1/army_units", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(chunk)
+          });
+        }
+        for (const chunk of chunkArray(extracted.weapons, 100)) {
+          await supabaseRequest("/rest/v1/army_weapons", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(chunk)
+          });
+        }
+      }
+
+      function collectTopLevelRosterUnits(roster) {
+        const output = [];
+        for (const force of roster.forces || []) {
+          for (const selection of force.selections || []) {
+            const categories = selection.categories || [];
+            const isConfiguration = categories.some(category => category.name === "Konfiguration" || category.name === "Configuration");
+            if (isConfiguration || selection.type === "upgrade") continue;
+
+            let hasUnit = false;
+            walkRosterSelection(selection, node => {
+              if ((node.profiles || []).some(isUnitProfile)) hasUnit = true;
+            });
+            if (hasUnit) output.push(selection);
+          }
+        }
+        return output;
+      }
+
+      function extractRosterUnit(selection, rosterId, sourceFile) {
+        const unitProfiles = [];
+        const weapons = [];
+        let modelCount = 0;
+        const unitId = `${rosterId}::${selection.id}`;
+
+        walkRosterSelection(selection, node => {
+          const profiles = node.profiles || [];
+          const nodeUnitProfiles = profiles.filter(isUnitProfile);
+          if (nodeUnitProfiles.length) {
+            modelCount += Number(node.number || 1);
+            unitProfiles.push(...nodeUnitProfiles.map(profile => ({ node, profile })));
+          }
+
+          profiles.filter(isWeaponProfile).forEach(profile => {
+            const chars = rosterCharMap(profile);
+            weapons.push({
+              id: `${rosterId}::${selection.id}::${node.id}::${profile.id}`,
+              roster_id: rosterId,
+              unit_id: unitId,
+              name: profile.name,
+              weapon_type: profile.typeName || "",
+              count: Number(node.number || 1),
+              range_text: chars.Reichweite || chars.Range || "",
+              attacks_text: chars.A || "",
+              skill_text: chars.KG || chars.BF || chars.WS || chars.BS || "",
+              strength_text: chars.S || "",
+              ap_text: chars.DS || chars.AP || "",
+              damage_text: chars.SW || chars.D || "",
+              keywords: cleanRosterKeywordText(chars.Schlüsselwort || chars.Schluesselwort || chars["SchlÃ¼sselwort"] || chars.Keywords || ""),
+              raw_profile: profile
+            });
+          });
+        });
+
+        const primary = unitProfiles[0]?.profile;
+        const primaryChars = primary ? rosterCharMap(primary) : {};
+        return {
+          unit: {
+            id: unitId,
+            roster_id: rosterId,
+            source_file: sourceFile,
+            name: selection.name,
+            model_count: modelCount || Number(selection.number || 1),
+            profile_name: primary?.name || selection.name,
+            movement_text: primaryChars.B || primaryChars.M || "",
+            toughness: parseIntegerText(primaryChars.W || primaryChars.T),
+            save: parseIntegerText(primaryChars.RW || primaryChars.SV),
+            wounds_per_model: parseIntegerText(primaryChars.LP || primaryChars.W),
+            leadership_text: primaryChars.MW || primaryChars.LD || "",
+            objective_control: parseIntegerText(primaryChars.MK || primaryChars.OC),
+            raw_selection: selection
+          },
+          weapons
+        };
+      }
+
+      function walkRosterSelection(selection, fn) {
+        fn(selection);
+        for (const child of selection.selections || []) walkRosterSelection(child, fn);
+      }
+
+      function rosterCharMap(profile) {
+        const result = {};
+        for (const characteristic of profile.characteristics || []) result[characteristic.name] = characteristic.$text || "";
+        return result;
+      }
+
+      function isUnitProfile(profile) {
+        return /^(einheit|unit)$/i.test(profile.typeName || "");
+      }
+
+      function isWeaponProfile(profile) {
+        return /waffe|weapon/i.test(profile.typeName || "");
+      }
+
+      function cleanRosterKeywordText(value) {
+        return String(value || "")
+          .replace(/^[-–]$/, "")
+          .split(/[,;]/)
+          .map(item => item.trim())
+          .filter(Boolean);
+      }
+
+      function slugText(value) {
+        return String(value)
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 80) || "army";
+      }
+
+      function chunkArray(items, size) {
+        const chunks = [];
+        for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+        return chunks;
+      }
+
       async function runArmyCompare() {
         const ownRosterId = ids.armyCompareOwnRoster.value;
         const enemyRosterId = ids.armyCompareEnemyRoster.value;
@@ -4374,12 +4596,19 @@
       async function refreshArmyData() {
         armyUnitsByRoster.clear();
         armyWeaponsByUnit.clear();
-        armyRosters = await supabaseRequest("/rest/v1/army_rosters?select=id,name&order=name.asc") || [];
+        armyRosters = await loadArmyRosters();
         renderArmyRosterSelect(ids.armyAttackerRoster);
         renderArmyRosterSelect(ids.armyTargetRoster);
         if (ids.armyAttackerRoster.value) await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
         if (ids.armyTargetRoster.value) await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
         await renderArmyWeapons();
+      }
+
+      async function loadArmyRosters() {
+        const profileFilter = cloudProfile
+          ? `&or=(profile_id.is.null,profile_id.eq.${encodeURIComponent(cloudProfile.id)})`
+          : "&profile_id=is.null";
+        return await supabaseRequest(`/rest/v1/army_rosters?select=id,name,profile_id${profileFilter}&order=name.asc`) || [];
       }
 
       async function refreshArmyEditorUnits() {
@@ -4432,6 +4661,7 @@
             headers: { Prefer: "return=minimal" },
             body: JSON.stringify({
               id,
+              profile_id: cloudProfile?.id || null,
               name,
               source_file: "manual",
               catalogue_name: name,
@@ -4536,7 +4766,7 @@
         }
 
         try {
-          armyRosters = await supabaseRequest("/rest/v1/army_rosters?select=id,name&order=name.asc") || [];
+          armyRosters = await loadArmyRosters();
           renderArmyRosterSelect(ids.armyAttackerRoster);
           renderArmyRosterSelect(ids.armyTargetRoster);
           if (armyRosters[0]) {

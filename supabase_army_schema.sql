@@ -1,5 +1,6 @@
 create table if not exists public.army_rosters (
   id text primary key,
+  profile_id uuid references public.battle_profiles(id) on delete cascade,
   name text not null,
   source_file text not null,
   catalogue_name text not null default '',
@@ -7,6 +8,9 @@ create table if not exists public.army_rosters (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.army_rosters
+  add column if not exists profile_id uuid references public.battle_profiles(id) on delete cascade;
 
 create table if not exists public.army_units (
   id text primary key,
@@ -47,6 +51,9 @@ create table if not exists public.army_weapons (
 
 create index if not exists army_units_roster_name_idx
   on public.army_units (roster_id, name);
+
+create index if not exists army_rosters_profile_name_idx
+  on public.army_rosters (profile_id, name);
 
 create index if not exists army_weapons_unit_name_idx
   on public.army_weapons (unit_id, name);
