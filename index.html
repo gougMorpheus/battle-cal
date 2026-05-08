@@ -1800,6 +1800,7 @@
       let armyRosters = [];
       let armyUnitsByRoster = new Map();
       let armyWeaponsByUnit = new Map();
+      let armyWeaponRoleAvailable = true;
       let manualWeaponInputs = [];
 
       initSelects();
@@ -4323,10 +4324,40 @@
             ...(options.headers || {})
           }
         });
-        if (!response.ok) throw new Error(`Supabase ${response.status}`);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          throw new Error(errorText || `Supabase ${response.status}`);
+        }
         if (response.status === 204) return null;
         const text = await response.text();
         return text ? JSON.parse(text) : null;
+      }
+
+      function isMissingWeaponRoleError(error) {
+        const message = String(error?.message || error || "");
+        return message.includes("weapon_role")
+          && (message.includes("does not exist") || message.includes("Could not find") || message.includes("schema cache"));
+      }
+
+      function stripWeaponRole(weapon) {
+        const { weapon_role, ...rest } = weapon;
+        return rest;
+      }
+
+      function normalizeArmyWeaponRole(weapon) {
+        return {
+          ...weapon,
+          weapon_role: weapon.weapon_role || (isProfileOptionName(weapon.name) ? "profile" : "weapon")
+        };
+      }
+
+      function friendlyErrorMessage(error) {
+        const message = String(error?.message || error || "");
+        if (message.includes("Invalid roster JSON")) return "Die Datei sieht nicht wie ein New-Recruit-JSON-Export aus.";
+        if (message.includes("profile_id")) return "In Supabase fehlt noch die Profil-Zuordnung. Bitte das aktuelle supabase_army_schema.sql ausführen.";
+        if (message.includes("weapon_role")) return "In Supabase fehlt noch die Waffenrolle. Der Import versucht es ohne diese Spalte; bitte danach das aktuelle supabase_army_schema.sql ausführen.";
+        if (message.includes("duplicate key")) return "Diese Armeeliste ist bereits teilweise vorhanden. Bitte Import erneut versuchen.";
+        return "Details stehen in der Browser-Konsole.";
       }
 
       async function openArmyEditor() {
@@ -4431,8 +4462,9 @@
           await renderArmyUnitSelect(extracted.roster.id, ids.armyTargetUnit);
           await renderArmyWeapons();
           showToast(`${extracted.roster.name} importiert: ${extracted.units.length} Einheiten, ${extracted.weapons.length} Waffen.`);
-        } catch {
-          showToast("Armeeliste konnte nicht importiert werden.");
+        } catch (error) {
+          console.error("Army roster import failed", error);
+          showToast(`Armeeliste konnte nicht importiert werden: ${friendlyErrorMessage(error)}`);
         }
       }
 
@@ -4481,10 +4513,24 @@
           });
         }
         for (const chunk of chunkArray(extracted.weapons, 100)) {
+          await saveArmyWeaponChunk(chunk);
+        }
+      }
+
+      async function saveArmyWeaponChunk(chunk) {
+        try {
           await supabaseRequest("/rest/v1/army_weapons", {
             method: "POST",
             headers: { Prefer: "return=minimal" },
             body: JSON.stringify(chunk)
+          });
+        } catch (error) {
+          if (!isMissingWeaponRoleError(error)) throw error;
+          armyWeaponRoleAvailable = false;
+          await supabaseRequest("/rest/v1/army_weapons", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(chunk.map(stripWeaponRole))
           });
         }
       }
@@ -5100,12 +5146,11 @@
 
         const existingId = ids.armyEditorWeaponSelect.value;
         const nextWeaponId = existingId || `manual-weapon-${createId()}`;
-        const payload = {
+        const basePayload = {
           roster_id: rosterId,
           unit_id: unitId,
           name,
           weapon_type: weaponType,
-          weapon_role: weaponRole,
           count,
           range_text: rangeText || (weaponType === "Nahkampfwaffen" ? "Nahkampf" : ""),
           attacks_text: attacksText,
@@ -5117,7 +5162,25 @@
           raw_profile: { manual: true, role: weaponRole, updatedAt: new Date().toISOString() },
           updated_at: new Date().toISOString()
         };
+        const payload = {
+          ...basePayload,
+          ...(armyWeaponRoleAvailable ? { weapon_role: weaponRole } : {}),
+        };
 
+        try {
+          await saveArmyEditorWeaponPayload(existingId, nextWeaponId, payload, basePayload);
+          armyWeaponsByUnit.delete(unitId);
+          await refreshArmyEditorWeapons();
+          ids.armyEditorWeaponSelect.value = nextWeaponId;
+          loadSelectedArmyEditorWeapon();
+          await renderArmyWeapons();
+          showToast("Waffe gespeichert.");
+        } catch {
+          showToast("Waffe konnte nicht gespeichert werden.");
+        }
+      }
+
+      async function saveArmyEditorWeaponPayload(existingId, nextWeaponId, payload, fallbackPayload) {
         try {
           if (existingId) {
             await supabaseRequest(`/rest/v1/army_weapons?id=eq.${encodeURIComponent(existingId)}`, {
@@ -5132,14 +5195,22 @@
               body: JSON.stringify({ id: nextWeaponId, ...payload })
             });
           }
-          armyWeaponsByUnit.delete(unitId);
-          await refreshArmyEditorWeapons();
-          ids.armyEditorWeaponSelect.value = nextWeaponId;
-          loadSelectedArmyEditorWeapon();
-          await renderArmyWeapons();
-          showToast("Waffe gespeichert.");
-        } catch {
-          showToast("Waffe konnte nicht gespeichert werden.");
+        } catch (error) {
+          if (!isMissingWeaponRoleError(error)) throw error;
+          armyWeaponRoleAvailable = false;
+          if (existingId) {
+            await supabaseRequest(`/rest/v1/army_weapons?id=eq.${encodeURIComponent(existingId)}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(fallbackPayload)
+            });
+          } else {
+            await supabaseRequest("/rest/v1/army_weapons", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({ id: nextWeaponId, ...fallbackPayload })
+            });
+          }
         }
       }
 
@@ -5210,7 +5281,17 @@
       async function loadArmyWeapons(unitId) {
         if (!unitId) return [];
         if (armyWeaponsByUnit.has(unitId)) return armyWeaponsByUnit.get(unitId);
-        const weapons = await supabaseRequest(`/rest/v1/army_weapons?select=id,name,weapon_type,weapon_role,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`) || [];
+        const withRolePath = `/rest/v1/army_weapons?select=id,name,weapon_type,weapon_role,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`;
+        const withoutRolePath = `/rest/v1/army_weapons?select=id,name,weapon_type,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`;
+        let weapons = [];
+        try {
+          weapons = await supabaseRequest(armyWeaponRoleAvailable ? withRolePath : withoutRolePath) || [];
+        } catch (error) {
+          if (!isMissingWeaponRoleError(error)) throw error;
+          armyWeaponRoleAvailable = false;
+          weapons = await supabaseRequest(withoutRolePath) || [];
+        }
+        weapons = weapons.map(normalizeArmyWeaponRole);
         armyWeaponsByUnit.set(unitId, weapons);
         return weapons;
       }
