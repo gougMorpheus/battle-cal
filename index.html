@@ -1596,6 +1596,10 @@
               <label for="armyEditorProfileName">Profilname</label>
               <input id="armyEditorProfileName" type="text" autocomplete="off" />
             </div>
+            <div class="field">
+              <label for="armyEditorAttachedUnit">Mit Einheit verbunden</label>
+              <select id="armyEditorAttachedUnit"></select>
+            </div>
           </div>
           <div class="button-row core-actions">
             <button type="button" id="armyEditorNewUnitBtn">Neue Einheit</button>
@@ -1817,6 +1821,7 @@
         armyEditorWounds: document.getElementById("armyEditorWounds"),
         armyEditorObjectiveControl: document.getElementById("armyEditorObjectiveControl"),
         armyEditorProfileName: document.getElementById("armyEditorProfileName"),
+        armyEditorAttachedUnit: document.getElementById("armyEditorAttachedUnit"),
         armyEditorNewUnitBtn: document.getElementById("armyEditorNewUnitBtn"),
         armyEditorSaveUnitBtn: document.getElementById("armyEditorSaveUnitBtn"),
         armyEditorDeleteUnitBtn: document.getElementById("armyEditorDeleteUnitBtn"),
@@ -5231,28 +5236,30 @@
             loadArmyUnits(ownRosterId),
             loadArmyUnits(enemyRosterId)
           ]);
+          const ownBattleUnits = buildBattleUnits(ownUnits);
+          const enemyBattleUnits = buildBattleUnits(enemyUnits);
           const allUnits = [...ownUnits, ...enemyUnits];
           await Promise.all(allUnits.map(unit => loadArmyWeapons(unit.id)));
 
           const filters = readArmyCompareEnemyFilters(ownUnits, enemyUnits);
-          const selectedOwnUnits = ownUnits.filter(unit => filters.enabledOwnIds.has(unit.id));
+          const selectedOwnUnits = ownBattleUnits.filter(unit => unit.member_ids.some(id => filters.enabledOwnIds.has(id)));
           const thresholdPercent = parseBoundedInt(ids.armyCompareThreshold.value, 1, 99) || 65;
           const probabilityTarget = thresholdPercent / 100;
-          const ownAttacks = analyzeArmyMatchups(selectedOwnUnits, enemyUnits, {
+          const ownAttacks = analyzeArmyMatchups(selectedOwnUnits, enemyBattleUnits, {
             probabilityTarget,
             allowPair: (attacker, defender, mode) => {
-              const unitFilters = filters.byOwn.get(attacker.id);
-              return unitFilters ? unitFilters[mode].has(defender.id) : filters.fallbackIds.has(defender.id);
+              const unitFilters = attacker.member_ids.map(id => filters.byOwn.get(id)).find(Boolean);
+              return unitFilters ? defender.member_ids.some(id => unitFilters[mode].has(id)) : defender.member_ids.some(id => filters.fallbackIds.has(id));
             }
           });
-          const enemyAttacks = analyzeArmyMatchups(enemyUnits, selectedOwnUnits, {
+          const enemyAttacks = analyzeArmyMatchups(enemyBattleUnits, selectedOwnUnits, {
             probabilityTarget,
             allowPair: (attacker, defender) => {
-              const unitFilters = filters.byOwn.get(defender.id);
-              return unitFilters ? unitFilters.defense.has(attacker.id) : filters.fallbackIds.has(attacker.id);
+              const unitFilters = defender.member_ids.map(id => filters.byOwn.get(id)).find(Boolean);
+              return unitFilters ? attacker.member_ids.some(id => unitFilters.defense.has(id)) : attacker.member_ids.some(id => filters.fallbackIds.has(id));
             }
           });
-          const summary = `${selectedOwnUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach ${thresholdPercent}%-Schaden im Verhältnis zum effektiven Gesamt-LP-Wert.`;
+          const summary = `${selectedOwnUnits.length} eigene Einheiten gegen ${enemyBattleUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach ${thresholdPercent}%-Schaden im Verhältnis zum effektiven Gesamt-LP-Wert.`;
           const entry = {
             id: createId(),
             createdAt: new Date().toISOString(),
@@ -5263,7 +5270,7 @@
               ownRoster?.name || "",
               enemyRoster?.name || "",
               selectedOwnUnits.map(unit => unit.name).join(" "),
-              enemyUnits.map(unit => unit.name).join(" "),
+              enemyBattleUnits.map(unit => unit.name).join(" "),
               summary
             ].join(" ")
           };
@@ -5295,7 +5302,9 @@
       }
 
       function calculateUnitAttackMode(attacker, defender, mode, probabilityTarget = 0.65) {
-        const weapons = (armyWeaponsByUnit.get(attacker.id) || []).filter(weapon => weaponMatchesAttackMode(weapon, mode));
+        const weapons = (attacker.member_ids || [attacker.id])
+          .flatMap(id => armyWeaponsByUnit.get(id) || [])
+          .filter(weapon => weaponMatchesAttackMode(weapon, mode));
         const bestLoadout = selectBestWeaponLoadout(attacker, defender, weapons, mode, probabilityTarget);
         if (!bestLoadout) return null;
         const { selectedWeapons, outputs } = bestLoadout;
@@ -5715,6 +5724,7 @@
         ids.armyEditorWounds.value = unit.wounds_per_model ? String(unit.wounds_per_model) : "";
         ids.armyEditorObjectiveControl.value = unit.objective_control || unit.objective_control === 0 ? String(unit.objective_control) : "";
         ids.armyEditorProfileName.value = unit.profile_name || "";
+        renderArmyEditorAttachedUnitSelect(units, unit);
         await refreshArmyEditorWeapons();
       }
 
@@ -5728,7 +5738,20 @@
         ids.armyEditorWounds.value = "";
         ids.armyEditorObjectiveControl.value = "";
         ids.armyEditorProfileName.value = "";
+        renderArmyEditorAttachedUnitSelect(armyUnitsByRoster.get(ids.armyEditorRosterSelect.value) || [], null);
         clearArmyEditorWeaponList();
+      }
+
+      function renderArmyEditorAttachedUnitSelect(units, currentUnit) {
+        const currentId = currentUnit?.id || "";
+        const attachedId = getAttachedUnitId(currentUnit);
+        ids.armyEditorAttachedUnit.innerHTML = [
+          `<option value="">Keine Verbindung</option>`,
+          ...units
+            .filter(unit => unit.id !== currentId)
+            .map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`)
+        ].join("");
+        ids.armyEditorAttachedUnit.value = attachedId && attachedId !== currentId ? attachedId : "";
       }
 
       async function refreshArmyEditorWeapons() {
@@ -5855,6 +5878,7 @@
         const wounds = parsePositiveInt(ids.armyEditorWounds.value);
         const objectiveControl = ids.armyEditorObjectiveControl.value === "" ? null : parsePositiveInt(ids.armyEditorObjectiveControl.value);
         const profileName = ids.armyEditorProfileName.value.trim();
+        const attachedUnitId = ids.armyEditorAttachedUnit.value || "";
 
         if (!rosterId) {
           showToast("Bitte zuerst eine Armee wählen oder anlegen.");
@@ -5873,6 +5897,7 @@
           __battle_cal_editor_overrides: {
             ...(currentUnit?.raw_selection?.__battle_cal_editor_overrides || {}),
             model_count: modelCount,
+            attached_unit_id: attachedUnitId || null,
             updatedAt: new Date().toISOString()
           }
         };
@@ -5892,6 +5917,7 @@
 
         try {
           await saveArmyEditorUnitPayload(existingId, nextUnitId, editablePayload, stripInvulnerableSave(editablePayload));
+          await syncAttachedUnitLink(rosterId, nextUnitId, attachedUnitId);
           await refreshArmyData();
           ids.armyEditorRosterSelect.value = rosterId;
           await refreshArmyEditorUnits();
@@ -5946,6 +5972,42 @@
             });
           }
         }
+      }
+
+      async function syncAttachedUnitLink(rosterId, unitId, attachedUnitId) {
+        const units = armyUnitsByRoster.get(rosterId) || await loadArmyUnits(rosterId);
+        const currentPair = units.filter(unit => getAttachedUnitId(unit) === unitId || getAttachedUnitId(unit) === attachedUnitId);
+        for (const unit of currentPair) {
+          if (unit.id === unitId || unit.id === attachedUnitId) continue;
+          await patchUnitEditorOverrides(unit, { attached_unit_id: null });
+        }
+        const currentUnit = units.find(unit => unit.id === unitId);
+        if (attachedUnitId) {
+          const attachedUnit = units.find(unit => unit.id === attachedUnitId);
+          if (currentUnit) await patchUnitEditorOverrides(currentUnit, { attached_unit_id: attachedUnitId });
+          if (attachedUnit) await patchUnitEditorOverrides(attachedUnit, { attached_unit_id: unitId });
+        } else if (currentUnit) {
+          const previousPartner = units.find(unit => getAttachedUnitId(unit) === unitId);
+          await patchUnitEditorOverrides(currentUnit, { attached_unit_id: null });
+          if (previousPartner) await patchUnitEditorOverrides(previousPartner, { attached_unit_id: null });
+        }
+        armyUnitsByRoster.delete(rosterId);
+      }
+
+      async function patchUnitEditorOverrides(unit, overrides) {
+        const rawSelection = {
+          ...(unit.raw_selection && typeof unit.raw_selection === "object" ? unit.raw_selection : {}),
+          __battle_cal_editor_overrides: {
+            ...(unit.raw_selection?.__battle_cal_editor_overrides || {}),
+            ...overrides,
+            updatedAt: new Date().toISOString()
+          }
+        };
+        await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(unit.id)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ raw_selection: rawSelection, updated_at: new Date().toISOString() })
+        });
       }
 
       async function deleteArmyEditorUnit() {
@@ -6125,7 +6187,6 @@
 
       function normalizeArmyUnitInvulnerableSave(unit) {
         const rawProfiles = extractModelProfilesFromRawSelection(unit.raw_selection);
-        if (!rawProfiles.length && unit.invulnerable_save) return unit;
         const allocationProfiles = sortModelProfilesForDamageAllocation(rawProfiles);
         const primaryProfile = allocationProfiles[0] || rawProfiles[0];
         const computedModelCount = sumValues(rawProfiles, profile => Number(profile.count || 0));
@@ -6140,13 +6201,78 @@
         };
       }
 
+      function getAttachedUnitId(unit) {
+        const value = unit?.raw_selection?.__battle_cal_editor_overrides?.attached_unit_id;
+        return value ? String(value) : "";
+      }
+
+      function buildBattleUnits(units) {
+        const byId = new Map(units.map(unit => [unit.id, unit]));
+        const consumed = new Set();
+        const output = [];
+        units.forEach(unit => {
+          if (consumed.has(unit.id)) return;
+          const partnerId = getAttachedUnitId(unit);
+          const partner = partnerId ? byId.get(partnerId) : null;
+          if (partner && getAttachedUnitId(partner) === unit.id) {
+            consumed.add(unit.id);
+            consumed.add(partner.id);
+            output.push(composeBattleUnit([unit, partner]));
+          } else {
+            consumed.add(unit.id);
+            output.push(composeBattleUnit([unit]));
+          }
+        });
+        return output;
+      }
+
+      function composeBattleUnit(parts) {
+        if (parts.length === 1) {
+          return { ...parts[0], member_ids: [parts[0].id], display_name: parts[0].name };
+        }
+        const profiles = parts.flatMap(part => getUnitModelProfiles(part));
+        const allocationProfiles = sortModelProfilesForDamageAllocation(profiles);
+        const primary = allocationProfiles[0] || {};
+        return {
+          ...parts[0],
+          id: parts.map(part => part.id).sort().join("+"),
+          name: parts.map(part => part.name).join(" + "),
+          display_name: parts.map(part => part.name).join(" + "),
+          member_ids: parts.map(part => part.id),
+          model_count: sumValues(profiles, profile => Number(profile.count || 0)) || sumValues(parts, part => Number(part.model_count || 0)),
+          toughness: primary.toughness || parts[0].toughness,
+          save: primary.save || parts[0].save,
+          invulnerable_save: primary.invulnerable_save || parts[0].invulnerable_save,
+          wounds_per_model: primary.wounds_per_model || parts[0].wounds_per_model,
+          raw_selection: {
+            composite: true,
+            __battle_cal_model_profiles: profiles,
+            members: parts.map(part => ({ id: part.id, name: part.name }))
+          }
+        };
+      }
+
+      function getUnitModelProfiles(unit) {
+        const rawProfiles = unit.raw_selection?.__battle_cal_model_profiles || extractModelProfilesFromRawSelection(unit.raw_selection);
+        if (rawProfiles.length) return applyModelProfileCountOverride(rawProfiles, unit).map(profile => ({ ...profile, unit_id: unit.id }));
+        return [{
+          name: unit.profile_name || unit.name,
+          count: Number(unit.model_count || 1),
+          toughness: unit.toughness,
+          save: unit.save,
+          invulnerable_save: unit.invulnerable_save,
+          wounds_per_model: unit.wounds_per_model || 1,
+          unit_id: unit.id
+        }];
+      }
+
       function getCurrentProfileRosters() {
         if (!cloudProfile) return [];
         return armyRosters.filter(roster => roster.profile_id === cloudProfile.id);
       }
 
       async function renderArmyUnitSelect(rosterId, select) {
-        const units = await loadArmyUnits(rosterId);
+        const units = buildBattleUnits(await loadArmyUnits(rosterId));
         select.innerHTML = units.length
           ? units.map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)} (${unit.model_count}x)</option>`).join("")
           : `<option value="">Keine Einheiten</option>`;
@@ -6170,9 +6296,17 @@
         return weapons;
       }
 
+      async function loadBattleUnitWeapons(unit) {
+        const memberIds = unit?.member_ids?.length ? unit.member_ids : [unit?.id].filter(Boolean);
+        const weaponGroups = await Promise.all(memberIds.map(id => loadArmyWeapons(id)));
+        return weaponGroups.flat();
+      }
+
       async function renderArmyWeapons() {
         const previousSelectedIds = new Set(Array.from(ids.armyWeaponList.querySelectorAll("input[type='checkbox']:checked")).map(input => input.value));
-        const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
+        const units = buildBattleUnits(await loadArmyUnits(ids.armyAttackerRoster.value));
+        const attacker = units.find(unit => unit.id === ids.armyAttackerUnit.value);
+        const weapons = await loadBattleUnitWeapons(attacker);
         if (!weapons.length) {
           ids.armyWeaponList.innerHTML = `<div class="muted">Keine Waffen für diese Einheit gefunden.</div>`;
           return;
@@ -6190,11 +6324,11 @@
       }
 
       async function calculateFromArmySelection() {
-        const attackerUnits = await loadArmyUnits(ids.armyAttackerRoster.value);
-        const targetUnits = await loadArmyUnits(ids.armyTargetRoster.value);
+        const attackerUnits = buildBattleUnits(await loadArmyUnits(ids.armyAttackerRoster.value));
+        const targetUnits = buildBattleUnits(await loadArmyUnits(ids.armyTargetRoster.value));
         const attacker = attackerUnits.find(unit => unit.id === ids.armyAttackerUnit.value);
         const target = targetUnits.find(unit => unit.id === ids.armyTargetUnit.value);
-        const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
+        const weapons = await loadBattleUnitWeapons(attacker);
         const selectedIds = Array.from(ids.armyWeaponList.querySelectorAll("input[type='checkbox']:checked")).map(input => input.value);
         const selectedWeapons = sortWeaponsByAttackPhase(weapons.filter(weapon => selectedIds.includes(weapon.id)));
         const specialErrors = [];
@@ -6459,7 +6593,7 @@
       }
 
       function buildDamageAllocationWounds(unit) {
-        const rawProfiles = unit.raw_selection?.__battle_cal_model_profiles || extractModelProfilesFromRawSelection(unit.raw_selection);
+        const rawProfiles = applyModelProfileCountOverride(unit.raw_selection?.__battle_cal_model_profiles || extractModelProfilesFromRawSelection(unit.raw_selection), unit);
         if (!Array.isArray(rawProfiles) || !rawProfiles.length) {
           return Array(Number(unit.model_count || 1)).fill(Number(unit.wounds_per_model || 1));
         }
@@ -6473,6 +6607,16 @@
         const fallback = Number(unit.wounds_per_model || 1);
         while (wounds.length < Number(unit.model_count || 1)) wounds.push(fallback);
         return wounds.slice(0, Number(unit.model_count || wounds.length || 1));
+      }
+
+      function applyModelProfileCountOverride(rawProfiles, unit) {
+        const profiles = Array.isArray(rawProfiles) ? rawProfiles.map(profile => ({ ...profile })) : [];
+        const overrideCount = parsePositiveInt(unit?.raw_selection?.__battle_cal_editor_overrides?.model_count);
+        if (!overrideCount || !profiles.length) return profiles;
+        if (profiles.length === 1) return [{ ...profiles[0], count: overrideCount }];
+        const currentTotal = sumValues(profiles, profile => Number(profile.count || 0));
+        if (currentTotal === overrideCount) return profiles;
+        return profiles;
       }
 
       function extractModelProfilesFromRawSelection(selection) {
