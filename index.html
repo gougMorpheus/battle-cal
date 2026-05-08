@@ -1505,6 +1505,16 @@
               <select id="armyCompareEnemyRoster"></select>
             </div>
           </div>
+          <details class="mini-details" open>
+            <summary>
+              <div class="meta-row">
+                <span class="pill"><span class="summary-arrow">▶</span>Gegnerische Einheiten berücksichtigen</span>
+              </div>
+            </summary>
+            <div class="mini-details-body">
+              <div id="armyCompareEnemyFilters" class="list-stack"></div>
+            </div>
+          </details>
           <div class="button-row core-actions">
             <button type="button" id="armyCompareRunBtn" class="primary">Armeen vergleichen</button>
           </div>
@@ -1580,6 +1590,7 @@
         armyCompareCloseBtn: document.getElementById("armyCompareCloseBtn"),
         armyCompareOwnRoster: document.getElementById("armyCompareOwnRoster"),
         armyCompareEnemyRoster: document.getElementById("armyCompareEnemyRoster"),
+        armyCompareEnemyFilters: document.getElementById("armyCompareEnemyFilters"),
         armyCompareRunBtn: document.getElementById("armyCompareRunBtn"),
         armyCompareStatus: document.getElementById("armyCompareStatus"),
         armyCompareResults: document.getElementById("armyCompareResults"),
@@ -1955,6 +1966,10 @@
 
         ids.armyCompareModal.addEventListener("click", event => {
           if (event.target === ids.armyCompareModal) closeArmyCompare();
+        });
+
+        ids.armyCompareEnemyRoster.addEventListener("change", async () => {
+          await renderArmyCompareEnemyFilters();
         });
 
         ids.armyCompareRunBtn.addEventListener("click", async () => {
@@ -4151,6 +4166,7 @@
           renderArmyRosterSelect(ids.armyCompareEnemyRoster);
           if (armyRosters[0]) ids.armyCompareOwnRoster.value = armyRosters[0].id;
           if (armyRosters[1]) ids.armyCompareEnemyRoster.value = armyRosters[1].id;
+          await renderArmyCompareEnemyFilters();
           ids.armyCompareStatus.textContent = "Wähle zwei Armeen und starte den Vergleich.";
         } catch {
           ids.armyCompareStatus.textContent = "Armeen konnten nicht aus der Cloud geladen werden.";
@@ -4160,6 +4176,47 @@
       function closeArmyCompare() {
         ids.armyCompareModal.classList.remove("show");
         ids.armyCompareModal.setAttribute("aria-hidden", "true");
+      }
+
+      async function renderArmyCompareEnemyFilters() {
+        const units = await loadArmyUnits(ids.armyCompareEnemyRoster.value);
+        ids.armyCompareEnemyFilters.innerHTML = units.length
+          ? units.map(unit => `
+              <div class="list-row">
+                <span>
+                  <strong>${escapeHtml(unit.name)}</strong><br />
+                  <small>${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(unit.wounds_per_model || "-")} LP</small>
+                </span>
+                <label class="toggle-label">
+                  <input type="checkbox" data-army-compare-filter="ranged" value="${escapeHtml(unit.id)}" checked />
+                  Fernkampf
+                </label>
+                <label class="toggle-label">
+                  <input type="checkbox" data-army-compare-filter="melee" value="${escapeHtml(unit.id)}" checked />
+                  Nahkampf
+                </label>
+                <label class="toggle-label">
+                  <input type="checkbox" data-army-compare-filter="defense" value="${escapeHtml(unit.id)}" checked />
+                  Verteidigung
+                </label>
+              </div>
+            `).join("")
+          : `<div class="list-row"><span>Keine gegnerischen Einheiten gefunden.</span></div>`;
+      }
+
+      function readArmyCompareEnemyFilters(enemyUnits) {
+        const fallbackIds = new Set(enemyUnits.map(unit => unit.id));
+        const readSet = type => {
+          const checked = Array.from(ids.armyCompareEnemyFilters.querySelectorAll(`input[data-army-compare-filter="${type}"]:checked`)).map(input => input.value);
+          return checked.length || ids.armyCompareEnemyFilters.querySelector(`[data-army-compare-filter="${type}"]`)
+            ? new Set(checked)
+            : new Set(fallbackIds);
+        };
+        return {
+          ranged: readSet("ranged"),
+          melee: readSet("melee"),
+          defense: readSet("defense")
+        };
       }
 
       async function importArmyRosterFile(file) {
@@ -4383,8 +4440,15 @@
           const allUnits = [...ownUnits, ...enemyUnits];
           await Promise.all(allUnits.map(unit => loadArmyWeapons(unit.id)));
 
-          const ownAttacks = analyzeArmyMatchups(ownUnits, enemyUnits);
-          const enemyAttacks = analyzeArmyMatchups(enemyUnits, ownUnits);
+          const filters = readArmyCompareEnemyFilters(enemyUnits);
+          const enemyThreatUnits = enemyUnits.filter(unit => filters.defense.has(unit.id));
+          const ownAttacks = analyzeArmyMatchups(ownUnits, enemyUnits, {
+            defenderIdsByMode: {
+              ranged: filters.ranged,
+              melee: filters.melee
+            }
+          });
+          const enemyAttacks = analyzeArmyMatchups(enemyThreatUnits, ownUnits);
           ids.armyCompareResults.innerHTML = renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks);
           ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden je Kategorie die TOP3 nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
         } catch {
@@ -4392,12 +4456,14 @@
         }
       }
 
-      function analyzeArmyMatchups(attackers, defenders) {
+      function analyzeArmyMatchups(attackers, defenders, options = {}) {
         const results = new Map();
         attackers.forEach(attacker => {
           const byMode = { ranged: [], melee: [] };
           defenders.forEach(defender => {
             ["ranged", "melee"].forEach(mode => {
+              const allowedDefenders = options.defenderIdsByMode?.[mode];
+              if (allowedDefenders && !allowedDefenders.has(defender.id)) return;
               const result = calculateUnitAttackMode(attacker, defender, mode);
               if (result) byMode[mode].push(result);
             });
