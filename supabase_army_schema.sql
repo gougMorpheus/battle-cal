@@ -22,6 +22,7 @@ create table if not exists public.army_units (
   movement_text text not null default '',
   toughness integer,
   save integer,
+  invulnerable_save integer,
   wounds_per_model integer,
   leadership_text text not null default '',
   objective_control integer,
@@ -29,6 +30,9 @@ create table if not exists public.army_units (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.army_units
+  add column if not exists invulnerable_save integer;
 
 create table if not exists public.army_weapons (
   id text primary key,

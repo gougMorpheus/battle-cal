@@ -1564,6 +1564,12 @@
               </select>
             </div>
             <div class="field">
+              <label for="armyEditorInvulnerableSave">Rettungswurf / Invul Save</label>
+              <select id="armyEditorInvulnerableSave">
+                <option value="">Kein ++</option>
+              </select>
+            </div>
+            <div class="field">
               <label for="armyEditorWounds">Lebenspunkte pro Modell</label>
               <input id="armyEditorWounds" type="number" min="1" step="1" inputmode="numeric" />
             </div>
@@ -1792,6 +1798,7 @@
         armyEditorModelCount: document.getElementById("armyEditorModelCount"),
         armyEditorToughness: document.getElementById("armyEditorToughness"),
         armyEditorSave: document.getElementById("armyEditorSave"),
+        armyEditorInvulnerableSave: document.getElementById("armyEditorInvulnerableSave"),
         armyEditorWounds: document.getElementById("armyEditorWounds"),
         armyEditorObjectiveControl: document.getElementById("armyEditorObjectiveControl"),
         armyEditorProfileName: document.getElementById("armyEditorProfileName"),
@@ -1885,6 +1892,7 @@
       let armyUnitsByRoster = new Map();
       let armyWeaponsByUnit = new Map();
       let armyWeaponRoleAvailable = true;
+      let armyUnitInvulnerableSaveAvailable = true;
       let manualWeaponInputs = [];
 
       initSelects();
@@ -1912,7 +1920,7 @@
           });
         });
 
-        [ids.saveTarget, ids.fnpTarget, ids.armyEditorSave].forEach(select => {
+        [ids.saveTarget, ids.fnpTarget, ids.armyEditorSave, ids.armyEditorInvulnerableSave].forEach(select => {
           facesSaveFnp.forEach(value => {
             const option = document.createElement("option");
             option.value = String(value);
@@ -3905,7 +3913,7 @@
           !searchTerm || normalizeSearch(`${entry.title} ${entry.summary} ${entry.searchText}`).includes(searchTerm)
         );
         ids.armyCompareHistoryContainer.innerHTML = visibleEntries.length
-          ? visibleEntries.map((entry, index) => renderArmyCompareHistoryCard(entry, armyCompareEntries.findIndex(item => item.id === entry.id), index === 0)).join("")
+          ? visibleEntries.map(entry => renderArmyCompareHistoryCard(entry, armyCompareEntries.findIndex(item => item.id === entry.id), false)).join("")
           : `<section class="card panel"><div class="note-box">Keine Armeevergleiche für diese Suche.</div></section>`;
       }
 
@@ -4488,7 +4496,7 @@
           saveHistory();
           compareSelection = compareSelection.filter(id => historyEntries.some(entry => entry.id === id));
           editingHistoryId = null;
-          openHistoryId = historyEntries[0]?.id || null;
+          openHistoryId = null;
           renderHistory();
           markSynced();
           showToast(`Cloud-Profil ${cloudProfile.name} geladen.`);
@@ -4579,8 +4587,19 @@
           && (message.includes("does not exist") || message.includes("Could not find") || message.includes("schema cache"));
       }
 
+      function isMissingInvulnerableSaveError(error) {
+        const message = String(error?.message || error || "");
+        return message.includes("invulnerable_save")
+          && (message.includes("does not exist") || message.includes("Could not find") || message.includes("schema cache"));
+      }
+
       function stripWeaponRole(weapon) {
         const { weapon_role, ...rest } = weapon;
+        return rest;
+      }
+
+      function stripInvulnerableSave(unit) {
+        const { invulnerable_save, ...rest } = unit;
         return rest;
       }
 
@@ -4595,6 +4614,7 @@
         const message = String(error?.message || error || "");
         if (message.includes("Invalid roster JSON")) return "Die Datei sieht nicht wie ein New-Recruit-JSON-Export aus.";
         if (message.includes("profile_id")) return "In Supabase fehlt noch die Profil-Zuordnung. Bitte das aktuelle supabase_army_schema.sql ausführen.";
+        if (message.includes("invulnerable_save")) return "In Supabase fehlt noch die Rettungswurf-Spalte. Bitte das aktuelle supabase_army_schema.sql ausführen.";
         if (message.includes("weapon_role")) return "In Supabase fehlt noch die Waffenrolle. Der Import versucht es ohne diese Spalte; bitte danach das aktuelle supabase_army_schema.sql ausführen.";
         if (message.includes("duplicate key")) return "Diese Armeeliste ist bereits teilweise vorhanden. Bitte Import erneut versuchen.";
         return "Details stehen in der Browser-Konsole.";
@@ -4662,7 +4682,7 @@
                 <div class="list-row">
                   <span>
                     <strong>${escapeHtml(enemyUnit.name)}</strong><br />
-                    <small>${escapeHtml(enemyUnit.model_count)} Modelle, W${escapeHtml(enemyUnit.toughness || "-")}, ${escapeHtml(enemyUnit.wounds_per_model || "-")} LP</small>
+                  <small>${escapeHtml(enemyUnit.model_count)} Modelle, W${escapeHtml(enemyUnit.toughness || "-")}, ${formatUnitSaves(enemyUnit)}, ${escapeHtml(enemyUnit.wounds_per_model || "-")} LP</small>
                   </span>
                   <label class="toggle-label">
                     <input type="checkbox" data-army-compare-filter="ranged" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
@@ -4771,14 +4791,28 @@
           body: JSON.stringify(extracted.roster)
         });
         for (const chunk of chunkArray(extracted.units, 100)) {
+          await saveArmyUnitChunk(chunk);
+        }
+        for (const chunk of chunkArray(extracted.weapons, 100)) {
+          await saveArmyWeaponChunk(chunk);
+        }
+      }
+
+      async function saveArmyUnitChunk(chunk) {
+        try {
           await supabaseRequest("/rest/v1/army_units", {
             method: "POST",
             headers: { Prefer: "return=minimal" },
             body: JSON.stringify(chunk)
           });
-        }
-        for (const chunk of chunkArray(extracted.weapons, 100)) {
-          await saveArmyWeaponChunk(chunk);
+        } catch (error) {
+          if (!isMissingInvulnerableSaveError(error)) throw error;
+          armyUnitInvulnerableSaveAvailable = false;
+          await supabaseRequest("/rest/v1/army_units", {
+            method: "POST",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify(chunk.map(stripInvulnerableSave))
+          });
         }
       }
 
@@ -4867,6 +4901,7 @@
             movement_text: primaryChars.B || primaryChars.M || "",
             toughness: parseIntegerText(primaryChars.W || primaryChars.T),
             save: parseIntegerText(primaryChars.RW || primaryChars.SV),
+            invulnerable_save: parseInvulnerableSave(selection, primaryChars),
             wounds_per_model: parseIntegerText(primaryChars.LP || primaryChars.W),
             leadership_text: primaryChars.MW || primaryChars.LD || "",
             objective_control: parseIntegerText(primaryChars.MK || primaryChars.OC),
@@ -5109,7 +5144,7 @@
                 <summary>
                   <div class="summary-head">
                     <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(unit.name)}</span>
-                    <span class="section-summary-text">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
+                    <span class="section-summary-text">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(formatUnitSaves(unit))}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
                   </div>
                 </summary>
                 <div class="section-details-body stack">
@@ -5239,6 +5274,7 @@
         ids.armyEditorModelCount.value = String(unit.model_count || 1);
         ids.armyEditorToughness.value = unit.toughness ? String(unit.toughness) : "";
         ids.armyEditorSave.value = unit.save ? String(unit.save) : "";
+        ids.armyEditorInvulnerableSave.value = unit.invulnerable_save ? String(unit.invulnerable_save) : "";
         ids.armyEditorWounds.value = unit.wounds_per_model ? String(unit.wounds_per_model) : "";
         ids.armyEditorObjectiveControl.value = unit.objective_control || unit.objective_control === 0 ? String(unit.objective_control) : "";
         ids.armyEditorProfileName.value = unit.profile_name || "";
@@ -5251,6 +5287,7 @@
         ids.armyEditorModelCount.value = "1";
         ids.armyEditorToughness.value = "";
         ids.armyEditorSave.value = "";
+        ids.armyEditorInvulnerableSave.value = "";
         ids.armyEditorWounds.value = "";
         ids.armyEditorObjectiveControl.value = "";
         ids.armyEditorProfileName.value = "";
@@ -5346,6 +5383,7 @@
         const modelCount = parsePositiveInt(ids.armyEditorModelCount.value);
         const toughness = parsePositiveInt(ids.armyEditorToughness.value);
         const save = ids.armyEditorSave.value === "" ? null : parseBoundedInt(ids.armyEditorSave.value, 2, 6);
+        const invulnerableSave = ids.armyEditorInvulnerableSave.value === "" ? null : parseBoundedInt(ids.armyEditorInvulnerableSave.value, 2, 6);
         const wounds = parsePositiveInt(ids.armyEditorWounds.value);
         const objectiveControl = ids.armyEditorObjectiveControl.value === "" ? null : parsePositiveInt(ids.armyEditorObjectiveControl.value);
         const profileName = ids.armyEditorProfileName.value.trim();
@@ -5354,7 +5392,7 @@
           showToast("Bitte zuerst eine Armee wählen oder anlegen.");
           return;
         }
-        if (!name || modelCount === null || toughness === null || wounds === null || (ids.armyEditorSave.value !== "" && save === null) || (ids.armyEditorObjectiveControl.value !== "" && objectiveControl === null)) {
+        if (!name || modelCount === null || toughness === null || wounds === null || (ids.armyEditorSave.value !== "" && save === null) || (ids.armyEditorInvulnerableSave.value !== "" && invulnerableSave === null) || (ids.armyEditorObjectiveControl.value !== "" && objectiveControl === null)) {
           showToast("Bitte Einheit vollständig und gültig ausfüllen.");
           return;
         }
@@ -5368,30 +5406,14 @@
           profile_name: profileName,
           toughness,
           save,
+          ...(armyUnitInvulnerableSaveAvailable ? { invulnerable_save: invulnerableSave } : {}),
           wounds_per_model: wounds,
           objective_control: objectiveControl,
           updated_at: new Date().toISOString()
         };
 
         try {
-          if (existingId) {
-            await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(existingId)}`, {
-              method: "PATCH",
-              headers: { Prefer: "return=minimal" },
-              body: JSON.stringify(editablePayload)
-            });
-          } else {
-            await supabaseRequest("/rest/v1/army_units", {
-              method: "POST",
-              headers: { Prefer: "return=minimal" },
-              body: JSON.stringify({
-                id: nextUnitId,
-                ...editablePayload,
-                source_file: "manual",
-                raw_selection: { manual: true, createdAt: new Date().toISOString() }
-              })
-            });
-          }
+          await saveArmyEditorUnitPayload(existingId, nextUnitId, editablePayload, stripInvulnerableSave(editablePayload));
           await refreshArmyData();
           ids.armyEditorRosterSelect.value = rosterId;
           await refreshArmyEditorUnits();
@@ -5400,6 +5422,50 @@
           showToast("Einheit gespeichert.");
         } catch {
           showToast("Einheit konnte nicht gespeichert werden.");
+        }
+      }
+
+      async function saveArmyEditorUnitPayload(existingId, nextUnitId, payload, fallbackPayload) {
+        try {
+          if (existingId) {
+            await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(existingId)}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(payload)
+            });
+          } else {
+            await supabaseRequest("/rest/v1/army_units", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({
+                id: nextUnitId,
+                ...payload,
+                source_file: "manual",
+                raw_selection: { manual: true, createdAt: new Date().toISOString() }
+              })
+            });
+          }
+        } catch (error) {
+          if (!isMissingInvulnerableSaveError(error)) throw error;
+          armyUnitInvulnerableSaveAvailable = false;
+          if (existingId) {
+            await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(existingId)}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(fallbackPayload)
+            });
+          } else {
+            await supabaseRequest("/rest/v1/army_units", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({
+                id: nextUnitId,
+                ...fallbackPayload,
+                source_file: "manual",
+                raw_selection: { manual: true, createdAt: new Date().toISOString() }
+              })
+            });
+          }
         }
       }
 
@@ -5563,9 +5629,27 @@
         if (!rosterId) return [];
         if (!getCurrentProfileRosters().some(roster => roster.id === rosterId)) return [];
         if (armyUnitsByRoster.has(rosterId)) return armyUnitsByRoster.get(rosterId);
-        const units = await supabaseRequest(`/rest/v1/army_units?select=id,roster_id,name,model_count,toughness,save,wounds_per_model,profile_name,objective_control,source_file,movement_text,leadership_text&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`) || [];
+        const withInvulPath = `/rest/v1/army_units?select=id,roster_id,name,model_count,toughness,save,invulnerable_save,wounds_per_model,profile_name,objective_control,source_file,movement_text,leadership_text,raw_selection&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`;
+        const withoutInvulPath = `/rest/v1/army_units?select=id,roster_id,name,model_count,toughness,save,wounds_per_model,profile_name,objective_control,source_file,movement_text,leadership_text,raw_selection&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`;
+        let units = [];
+        try {
+          units = await supabaseRequest(armyUnitInvulnerableSaveAvailable ? withInvulPath : withoutInvulPath) || [];
+        } catch (error) {
+          if (!isMissingInvulnerableSaveError(error)) throw error;
+          armyUnitInvulnerableSaveAvailable = false;
+          units = await supabaseRequest(withoutInvulPath) || [];
+        }
+        units = units.map(normalizeArmyUnitInvulnerableSave);
         armyUnitsByRoster.set(rosterId, units);
         return units;
+      }
+
+      function normalizeArmyUnitInvulnerableSave(unit) {
+        if (unit.invulnerable_save) return unit;
+        return {
+          ...unit,
+          invulnerable_save: parseInvulnerableSave(unit.raw_selection || {}, {})
+        };
       }
 
       function getCurrentProfileRosters() {
@@ -5673,7 +5757,7 @@
         const targetToughness = Number(target.toughness || 0);
         const ap = parseIntegerText(weapon.ap_text) || 0;
 
-        if (!attack || !damage || !hitTarget || !strength || !targetToughness || !target.save || !target.wounds_per_model) {
+        if (!attack || !damage || !hitTarget || !strength || !targetToughness || (!target.save && !target.invulnerable_save) || !target.wounds_per_model) {
           return { ok: false, weapon };
         }
 
@@ -5683,7 +5767,7 @@
           attackParams: attack.params,
           hitTarget,
           woundTarget: woundTargetFromStrength(strength, targetToughness),
-          saveTarget: effectiveSaveTarget(target.save, ap),
+          saveTarget: effectiveSaveTarget(target.save, target.invulnerable_save, ap),
           damageMode: damage.mode,
           damageParams: damage.params,
           hitReroll: "none",
@@ -5813,6 +5897,18 @@
         return parseIntegerText(text);
       }
 
+      function parseInvulnerableSave(selection, chars = {}) {
+        const charEntry = Object.entries(chars).find(([key]) => /invul|rett|retter/i.test(key));
+        const fromChar = charEntry ? parseIntegerText(charEntry[1]) : null;
+        if (fromChar) return fromChar;
+
+        const text = JSON.stringify(selection || {});
+        const doublePlus = text.match(/([2-6])\s*\+\+/);
+        if (doublePlus) return Number(doublePlus[1]);
+        const named = text.match(/(?:invulnerable save|rettungswurf|retter|invul)[\s\S]{0,120}?([2-6])\s*\+/i);
+        return named ? Number(named[1]) : null;
+      }
+
       function parseIntegerText(value) {
         const match = String(value || "").match(/-?\d+/);
         return match ? Number(match[0]) : null;
@@ -5826,10 +5922,16 @@
         return 5;
       }
 
-      function effectiveSaveTarget(save, ap) {
-        const target = Number(save) - Number(ap || 0);
-        if (target > 6) return null;
-        return Math.max(2, target);
+      function effectiveSaveTarget(save, invulnerableSave, ap) {
+        const normalSave = save ? Number(save) : null;
+        const invul = invulnerableSave ? Number(invulnerableSave) : null;
+        const apValue = Number(ap || 0);
+        const apPenalty = apValue < 0 ? -apValue : apValue;
+        const modifiedNormal = normalSave ? normalSave + apPenalty : null;
+        const usableNormal = modifiedNormal && modifiedNormal <= 6 ? Math.max(2, modifiedNormal) : null;
+        const usableInvul = invul && invul <= 6 ? Math.max(2, invul) : null;
+        if (usableNormal && usableInvul) return Math.min(usableNormal, usableInvul);
+        return usableNormal || usableInvul || null;
       }
 
       function parseKeywordNumber(text, pattern) {
@@ -5843,6 +5945,12 @@
 
       function labelWeaponType(value) {
         return weaponMatchesAttackMode({ weapon_type: value, range_text: "" }, "melee") ? "Nahkampf" : "Fernkampf";
+      }
+
+      function formatUnitSaves(unit) {
+        const normal = unit.save ? `${unit.save}+` : "-";
+        const invul = unit.invulnerable_save ? ` / ${unit.invulnerable_save}++` : "";
+        return `Save ${normal}${invul}`;
       }
 
       function sumValues(items, fn) {
