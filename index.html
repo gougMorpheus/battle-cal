@@ -5095,12 +5095,12 @@
             roster_id: rosterId,
             source_file: sourceFile,
             name: selection.name,
-            model_count: modelCount || Number(selection.number || 1),
+            model_count: sumValues(modelProfiles, item => item.count) || modelCount || parseSelectionModelCount(selection),
             profile_name: primary?.name || selection.name,
             movement_text: primaryChars.B || primaryChars.M || "",
             toughness: parseIntegerText(primaryChars.W || primaryChars.T),
             save: parseIntegerText(primaryChars.RW || primaryChars.SV),
-            invulnerable_save: parseInvulnerableSave(selection, primaryChars),
+            invulnerable_save: firstNumber(allocationProfiles.map(item => item.invulnerable_save)) || parseInvulnerableSave(selection, primaryChars),
             wounds_per_model: parseIntegerText(primaryChars.LP || primaryChars.W),
             leadership_text: primaryChars.MW || primaryChars.LD || "",
             objective_control: parseIntegerText(primaryChars.MK || primaryChars.OC),
@@ -5111,7 +5111,9 @@
       }
 
       function buildRosterModelProfiles(unitProfiles, selection) {
-        const profiles = unitProfiles
+        const modelEntries = unitProfiles.filter(({ node }) => String(node.type || "").toLowerCase() === "model");
+        const entries = modelEntries.length ? modelEntries : unitProfiles;
+        const profiles = entries
           .map(({ node, profile }) => {
             const chars = rosterCharMap(profile);
             return {
@@ -5119,7 +5121,7 @@
               profile,
               chars,
               name: profile.name || selection.name,
-              count: Number(node.number || 1),
+              count: parseSelectionModelCount(node),
               toughness: parseIntegerText(chars.W || chars.T),
               save: parseIntegerText(chars.RW || chars.SV),
               invulnerable_save: parseInvulnerableSave(node, chars) || parseInvulnerableSave(selection, chars),
@@ -5137,6 +5139,17 @@
           chars: {},
           profile: null
         }];
+      }
+
+      function parseSelectionModelCount(selection) {
+        const direct = Number(selection?.number || 0);
+        if (direct > 0) return direct;
+        const nameMatch = String(selection?.name || "").match(/^\s*(\d+)\s*x?\s+/i);
+        return nameMatch ? Number(nameMatch[1]) : 1;
+      }
+
+      function firstNumber(values) {
+        return values.find(value => Number(value) > 0) || null;
       }
 
       function sortModelProfilesForDamageAllocation(modelProfiles) {
@@ -5977,10 +5990,18 @@
       }
 
       function normalizeArmyUnitInvulnerableSave(unit) {
-        if (unit.invulnerable_save) return unit;
+        const rawProfiles = extractModelProfilesFromRawSelection(unit.raw_selection);
+        if (!rawProfiles.length && unit.invulnerable_save) return unit;
+        const allocationProfiles = sortModelProfilesForDamageAllocation(rawProfiles);
+        const primaryProfile = allocationProfiles[0] || rawProfiles[0];
+        const computedModelCount = sumValues(rawProfiles, profile => Number(profile.count || 0));
         return {
           ...unit,
-          invulnerable_save: parseInvulnerableSave(unit.raw_selection || {}, {})
+          model_count: computedModelCount || unit.model_count,
+          toughness: unit.toughness || primaryProfile?.toughness || null,
+          save: unit.save || primaryProfile?.save || null,
+          invulnerable_save: unit.invulnerable_save || firstNumber(allocationProfiles.map(profile => profile.invulnerable_save)) || parseInvulnerableSave(unit.raw_selection || {}, {}),
+          wounds_per_model: unit.wounds_per_model || primaryProfile?.wounds_per_model || null
         };
       }
 
@@ -6237,15 +6258,25 @@
       }
 
       function parseInvulnerableSave(selection, chars = {}) {
-        const charEntry = Object.entries(chars).find(([key]) => /invul|rett|retter/i.test(key));
+        const charEntry = Object.entries(chars).find(([key]) => /invul|rett|retter|unverw/i.test(key));
         const fromChar = charEntry ? parseIntegerText(charEntry[1]) : null;
         if (fromChar) return fromChar;
 
-        const text = JSON.stringify(selection || {});
+        const text = normalizeRulesText(JSON.stringify(selection || {}));
         const doublePlus = text.match(/([2-6])\s*\+\+/);
         if (doublePlus) return Number(doublePlus[1]);
-        const named = text.match(/(?:invulnerable save|rettungswurf|retter|invul)[\s\S]{0,120}?([2-6])\s*\+/i);
-        return named ? Number(named[1]) : null;
+        const namedAfter = text.match(/(?:invulnerable save|unverwundbarkeitswurf|rettungswurf|retter|invul)[\s\S]{0,180}?([2-6])\s*\+/i);
+        if (namedAfter) return Number(namedAfter[1]);
+        const namedBefore = text.match(/([2-6])\s*\+[\s\S]{0,180}?(?:invulnerable save|unverwundbarkeitswurf|rettungswurf|retter|invul)/i);
+        return namedBefore ? Number(namedBefore[1]) : null;
+      }
+
+      function normalizeRulesText(value) {
+        return String(value || "")
+          .replace(/\\u00a0|&nbsp;|\u00a0/g, " ")
+          .replace(/\^\^|\*\*|__/g, "")
+          .replace(/\\n/g, " ")
+          .replace(/\s+/g, " ");
       }
 
       function parseIntegerText(value) {
