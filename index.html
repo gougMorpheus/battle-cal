@@ -147,7 +147,7 @@
     }
 
     .input-selection-mode .input-body,
-    .input-selection-mode .secondary-card {
+    .input-selection-mode .target-profile-details {
       display: none;
     }
 
@@ -1313,7 +1313,7 @@
             </div>
           </details>
 
-          <details class="section-details" id="targetProfileDetails">
+          <details class="section-details target-profile-details" id="targetProfileDetails">
             <summary>
               <div class="summary-head">
                 <span class="pill"><span class="summary-arrow">▶</span>Zielprofil</span>
@@ -2447,29 +2447,7 @@
           saveTarget: ids.saveTarget.value === "" ? null : parseBoundedInt(ids.saveTarget.value, 2, 6),
           damageMode: ids.damageMode.value,
           damageParams: collectModeNumbers("damage", ids.damageMode.value, errors),
-          hitReroll: ids.hitReroll.value,
-          woundReroll: ids.woundReroll.value,
-          sustained: {
-            enabled: ids.sustainedEnabled.checked,
-            value: 1,
-            crit: 6
-          },
-          lethal: {
-            enabled: ids.lethalEnabled.checked,
-            crit: 6
-          },
-          dev: {
-            enabled: ids.devEnabled.checked,
-            crit: 6
-          },
-          fnp: {
-            enabled: ids.fnpEnabled.checked,
-            target: null
-          },
-          preDamage: {
-            enabled: ids.preDamageEnabled.checked,
-            value: 0
-          },
+          ...collectSpecialRuleData(errors),
           targetProfile: null
         };
 
@@ -2532,6 +2510,65 @@
           }
         }
         return output;
+      }
+
+      function collectSpecialRuleData(errors = [], validate = false) {
+        const data = {
+          hitReroll: ids.hitReroll.value,
+          woundReroll: ids.woundReroll.value,
+          sustained: {
+            enabled: ids.sustainedEnabled.checked,
+            value: 1,
+            crit: 6
+          },
+          lethal: {
+            enabled: ids.lethalEnabled.checked,
+            crit: 6
+          },
+          dev: {
+            enabled: ids.devEnabled.checked,
+            crit: 6
+          },
+          fnp: {
+            enabled: ids.fnpEnabled.checked,
+            target: null
+          },
+          preDamage: {
+            enabled: ids.preDamageEnabled.checked,
+            value: 0
+          }
+        };
+
+        if (!validate) return data;
+
+        if (data.sustained.enabled) {
+          data.sustained.value = parsePositiveInt(ids.sustainedValue.value);
+          data.sustained.crit = parseBoundedInt(ids.sustainedCrit.value, 1, 6);
+          if (data.sustained.value === null) errors.push("Trefferhagel X muss eine positive Ganzzahl sein.");
+          if (data.sustained.crit === null) errors.push("Kritischer Treffer für Sustained Hits muss zwischen 1 und 6 liegen.");
+        }
+
+        if (data.lethal.enabled) {
+          data.lethal.crit = parseBoundedInt(ids.lethalCrit.value, 1, 6);
+          if (data.lethal.crit === null) errors.push("Kritischer Treffer für Lethal Hits muss zwischen 1 und 6 liegen.");
+        }
+
+        if (data.dev.enabled) {
+          data.dev.crit = parseBoundedInt(ids.devCrit.value, 1, 6);
+          if (data.dev.crit === null) errors.push("Kritische Verwundung für Devastating Wounds muss zwischen 1 und 6 liegen.");
+        }
+
+        if (data.fnp.enabled) {
+          data.fnp.target = parseBoundedInt(ids.fnpTarget.value, 2, 6);
+          if (data.fnp.target === null) errors.push("Feel No Pain muss zwischen 2+ und 6+ liegen.");
+        }
+
+        if (data.preDamage.enabled) {
+          data.preDamage.value = parsePositiveInt(ids.preDamageValue.value);
+          if (data.preDamage.value === null) errors.push("Vorschädigung muss eine positive Ganzzahl sein.");
+        }
+
+        return data;
       }
 
       function addCurrentManualWeapon() {
@@ -5325,13 +5362,20 @@
         const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
         const selectedIds = Array.from(ids.armyWeaponList.querySelectorAll("input[type='checkbox']:checked")).map(input => input.value);
         const selectedWeapons = weapons.filter(weapon => selectedIds.includes(weapon.id));
+        const specialErrors = [];
+        const specialRules = collectSpecialRuleData(specialErrors, true);
 
         if (!attacker || !target || !selectedWeapons.length) {
           showToast("Bitte Angreifer, Ziel und mindestens eine Waffe wählen.");
           return;
         }
+        if (specialErrors.length) {
+          renderErrors(specialErrors);
+          return;
+        }
 
-        const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, target, weapon));
+        clearErrors();
+        const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, target, weapon, { specialRules }));
         const invalid = weaponEntries.find(entry => !entry.ok);
         if (invalid) {
           showToast(`${cleanWeaponName(invalid.weapon.name)} kann noch nicht automatisch berechnet werden.`);
@@ -5409,12 +5453,48 @@
           armyWeaponName: cleanWeaponName(weapon.name)
         };
 
+        applyArmySpecialRuleData(data, options.specialRules);
         return { ok: true, weapon, data, outputs: calculateAll(data) };
       }
 
+      function applyArmySpecialRuleData(data, specialRules) {
+        if (!specialRules) return;
+        data.hitReroll = specialRules.hitReroll || "none";
+        data.woundReroll = strongestReroll(data.woundReroll, specialRules.woundReroll || "none");
+
+        if (specialRules.sustained?.enabled) {
+          data.sustained = {
+            enabled: true,
+            value: Math.max(Number(data.sustained?.value || 1), Number(specialRules.sustained.value || 1)),
+            crit: Math.min(Number(data.sustained?.crit || 6), Number(specialRules.sustained.crit || 6))
+          };
+        }
+
+        if (specialRules.lethal?.enabled) {
+          data.lethal = {
+            enabled: true,
+            crit: Math.min(Number(data.lethal?.crit || 6), Number(specialRules.lethal.crit || 6))
+          };
+        }
+
+        if (specialRules.dev?.enabled) {
+          data.dev = {
+            enabled: true,
+            crit: Math.min(Number(data.dev?.crit || 6), Number(specialRules.dev.crit || 6))
+          };
+        }
+
+        data.fnp = cloneInputData(specialRules.fnp || { enabled: false, target: null });
+        data.preDamage = cloneInputData(specialRules.preDamage || { enabled: false, value: 0 });
+      }
+
+      function strongestReroll(current, next) {
+        const rank = { none: 0, single: 1, ones: 2, failed: 3 };
+        return (rank[next] || 0) > (rank[current] || 0) ? next : current;
+      }
+
       function buildArmyHistoryInputs(attacker, target, weapons, weaponDataList) {
-        const firstWeapon = weapons[0];
-        const fallback = buildArmyWeaponCalculation(attacker, target, firstWeapon).data;
+        const fallback = cloneInputData(weaponDataList[0] || buildArmyWeaponCalculation(attacker, target, weapons[0]).data);
         return {
           ...fallback,
           weapons: weaponDataList.map(cloneInputData),
