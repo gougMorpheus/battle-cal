@@ -5867,6 +5867,15 @@
 
         const existingId = ids.armyEditorUnitSelect.value;
         const nextUnitId = existingId || `manual-unit-${createId()}`;
+        const currentUnit = (armyUnitsByRoster.get(rosterId) || []).find(unit => unit.id === existingId);
+        const nextRawSelection = {
+          ...(currentUnit?.raw_selection && typeof currentUnit.raw_selection === "object" ? currentUnit.raw_selection : {}),
+          __battle_cal_editor_overrides: {
+            ...(currentUnit?.raw_selection?.__battle_cal_editor_overrides || {}),
+            model_count: modelCount,
+            updatedAt: new Date().toISOString()
+          }
+        };
         const editablePayload = {
           roster_id: rosterId,
           name,
@@ -5877,6 +5886,7 @@
           ...(armyUnitInvulnerableSaveAvailable ? { invulnerable_save: invulnerableSave } : {}),
           wounds_per_model: wounds,
           objective_control: objectiveControl,
+          raw_selection: nextRawSelection,
           updated_at: new Date().toISOString()
         };
 
@@ -5894,6 +5904,7 @@
       }
 
       async function saveArmyEditorUnitPayload(existingId, nextUnitId, payload, fallbackPayload) {
+        const createRawSelection = payload.raw_selection || { manual: true, createdAt: new Date().toISOString() };
         try {
           if (existingId) {
             await supabaseRequest(`/rest/v1/army_units?id=eq.${encodeURIComponent(existingId)}`, {
@@ -5909,7 +5920,7 @@
                 id: nextUnitId,
                 ...payload,
                 source_file: "manual",
-                raw_selection: { manual: true, createdAt: new Date().toISOString() }
+                raw_selection: createRawSelection
               })
             });
           }
@@ -5930,7 +5941,7 @@
                 id: nextUnitId,
                 ...fallbackPayload,
                 source_file: "manual",
-                raw_selection: { manual: true, createdAt: new Date().toISOString() }
+                raw_selection: createRawSelection
               })
             });
           }
@@ -6118,9 +6129,10 @@
         const allocationProfiles = sortModelProfilesForDamageAllocation(rawProfiles);
         const primaryProfile = allocationProfiles[0] || rawProfiles[0];
         const computedModelCount = sumValues(rawProfiles, profile => Number(profile.count || 0));
+        const modelCountOverride = parsePositiveInt(unit.raw_selection?.__battle_cal_editor_overrides?.model_count);
         return {
           ...unit,
-          model_count: computedModelCount || unit.model_count,
+          model_count: modelCountOverride || computedModelCount || unit.model_count,
           toughness: unit.toughness || primaryProfile?.toughness || null,
           save: unit.save || primaryProfile?.save || null,
           invulnerable_save: unit.invulnerable_save || firstNumber(allocationProfiles.map(profile => profile.invulnerable_save)) || parseInvulnerableSave(unit.raw_selection || {}, {}),
