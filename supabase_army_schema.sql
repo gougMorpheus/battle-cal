@@ -36,6 +36,7 @@ create table if not exists public.army_weapons (
   unit_id text not null references public.army_units(id) on delete cascade,
   name text not null,
   weapon_type text not null default '',
+  weapon_role text not null default 'weapon',
   count integer not null default 1,
   range_text text not null default '',
   attacks_text text not null default '',
@@ -48,6 +49,14 @@ create table if not exists public.army_weapons (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.army_weapons
+  add column if not exists weapon_role text not null default 'weapon';
+
+update public.army_weapons
+  set weapon_role = 'profile'
+  where weapon_role = 'weapon'
+    and (name like '➤%' or name like '% - %');
 
 create index if not exists army_units_roster_name_idx
   on public.army_units (roster_id, name);

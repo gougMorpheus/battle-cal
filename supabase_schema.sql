@@ -1,8 +1,12 @@
 create table if not exists public.battle_profiles (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  delete_password text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table public.battle_profiles
+  add column if not exists delete_password text not null default '';
 
 create table if not exists public.battle_results (
   id text primary key,

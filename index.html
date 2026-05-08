@@ -1062,6 +1062,10 @@
               <label for="cloudProfileName">Neues Profil</label>
               <input id="cloudProfileName" type="text" autocomplete="off" placeholder="z. B. Tim" />
             </div>
+            <div class="field">
+              <label for="cloudProfilePassword">Löschpasswort</label>
+              <input id="cloudProfilePassword" type="password" autocomplete="new-password" placeholder="für Profil löschen" />
+            </div>
             <button type="button" id="cloudProfileCreateBtn">Anlegen</button>
           </div>
           <div class="standalone-action-group">
@@ -1479,6 +1483,83 @@
             <button type="button" id="armyEditorDeleteUnitBtn" class="warn">Einheit löschen</button>
           </div>
         </section>
+
+        <section class="mini-card">
+          <div class="card-title">
+            <h3>Waffen</h3>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorWeaponSelect">Waffe auswählen</label>
+              <select id="armyEditorWeaponSelect"></select>
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponName">Name</label>
+              <input id="armyEditorWeaponName" type="text" autocomplete="off" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorWeaponType">Nah oder Fernkampf</label>
+              <select id="armyEditorWeaponType">
+                <option value="Fernkampfwaffe">Fernkampf</option>
+                <option value="Nahkampfwaffen">Nahkampf</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponRole">Profil oder eigene Waffe</label>
+              <select id="armyEditorWeaponRole">
+                <option value="weapon">eigene Waffe</option>
+                <option value="profile">Profil / Auswahloption</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorWeaponCount">Anzahl</label>
+              <input id="armyEditorWeaponCount" type="number" min="1" step="1" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponRange">Reichweite</label>
+              <input id="armyEditorWeaponRange" type="text" autocomplete="off" placeholder="z. B. 24&quot; oder Nahkampf" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorWeaponAttacks">Attacken</label>
+              <input id="armyEditorWeaponAttacks" type="text" autocomplete="off" placeholder="z. B. 4, D6, 2D6" />
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponSkill">KG/BF</label>
+              <input id="armyEditorWeaponSkill" type="text" autocomplete="off" placeholder="z. B. 3+ oder N/A" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorWeaponStrength">Stärke</label>
+              <input id="armyEditorWeaponStrength" type="text" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponAp">DS</label>
+              <input id="armyEditorWeaponAp" type="text" autocomplete="off" />
+            </div>
+          </div>
+          <div class="grid two">
+            <div class="field">
+              <label for="armyEditorWeaponDamage">Schaden</label>
+              <input id="armyEditorWeaponDamage" type="text" autocomplete="off" placeholder="z. B. 2, D3, D6+1" />
+            </div>
+            <div class="field">
+              <label for="armyEditorWeaponKeywords">Keywords</label>
+              <input id="armyEditorWeaponKeywords" type="text" autocomplete="off" placeholder="Kommagetrennt" />
+            </div>
+          </div>
+          <div class="button-row core-actions">
+            <button type="button" id="armyEditorNewWeaponBtn">Neue Waffe</button>
+            <button type="button" id="armyEditorSaveWeaponBtn" class="primary">Waffe speichern</button>
+            <button type="button" id="armyEditorDeleteWeaponBtn" class="warn">Waffe löschen</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -1613,11 +1694,27 @@
         armyEditorNewUnitBtn: document.getElementById("armyEditorNewUnitBtn"),
         armyEditorSaveUnitBtn: document.getElementById("armyEditorSaveUnitBtn"),
         armyEditorDeleteUnitBtn: document.getElementById("armyEditorDeleteUnitBtn"),
+        armyEditorWeaponSelect: document.getElementById("armyEditorWeaponSelect"),
+        armyEditorWeaponName: document.getElementById("armyEditorWeaponName"),
+        armyEditorWeaponType: document.getElementById("armyEditorWeaponType"),
+        armyEditorWeaponRole: document.getElementById("armyEditorWeaponRole"),
+        armyEditorWeaponCount: document.getElementById("armyEditorWeaponCount"),
+        armyEditorWeaponRange: document.getElementById("armyEditorWeaponRange"),
+        armyEditorWeaponAttacks: document.getElementById("armyEditorWeaponAttacks"),
+        armyEditorWeaponSkill: document.getElementById("armyEditorWeaponSkill"),
+        armyEditorWeaponStrength: document.getElementById("armyEditorWeaponStrength"),
+        armyEditorWeaponAp: document.getElementById("armyEditorWeaponAp"),
+        armyEditorWeaponDamage: document.getElementById("armyEditorWeaponDamage"),
+        armyEditorWeaponKeywords: document.getElementById("armyEditorWeaponKeywords"),
+        armyEditorNewWeaponBtn: document.getElementById("armyEditorNewWeaponBtn"),
+        armyEditorSaveWeaponBtn: document.getElementById("armyEditorSaveWeaponBtn"),
+        armyEditorDeleteWeaponBtn: document.getElementById("armyEditorDeleteWeaponBtn"),
         exportHistoryBtn: document.getElementById("exportHistoryBtn"),
         importHistoryBtn: document.getElementById("importHistoryBtn"),
         importHistoryFile: document.getElementById("importHistoryFile"),
         cloudProfileSelect: document.getElementById("cloudProfileSelect"),
         cloudProfileName: document.getElementById("cloudProfileName"),
+        cloudProfilePassword: document.getElementById("cloudProfilePassword"),
         cloudProfileCreateBtn: document.getElementById("cloudProfileCreateBtn"),
         cloudProfilesRefreshBtn: document.getElementById("cloudProfilesRefreshBtn"),
         cloudProfileRenameBtn: document.getElementById("cloudProfileRenameBtn"),
@@ -2007,8 +2104,12 @@
           await refreshArmyEditorUnits();
         });
 
-        ids.armyEditorUnitSelect.addEventListener("change", () => {
-          loadSelectedArmyEditorUnit();
+        ids.armyEditorUnitSelect.addEventListener("change", async () => {
+          await loadSelectedArmyEditorUnit();
+        });
+
+        ids.armyEditorWeaponSelect.addEventListener("change", () => {
+          loadSelectedArmyEditorWeapon();
         });
 
         ids.armyEditorCreateRosterBtn.addEventListener("click", async () => {
@@ -2025,6 +2126,18 @@
 
         ids.armyEditorDeleteUnitBtn.addEventListener("click", async () => {
           await deleteArmyEditorUnit();
+        });
+
+        ids.armyEditorNewWeaponBtn.addEventListener("click", () => {
+          clearArmyEditorWeaponForm();
+        });
+
+        ids.armyEditorSaveWeaponBtn.addEventListener("click", async () => {
+          await saveArmyEditorWeapon();
+        });
+
+        ids.armyEditorDeleteWeaponBtn.addEventListener("click", async () => {
+          await deleteArmyEditorWeapon();
         });
 
         ids.compareCloseBtn.addEventListener("click", closeCompareModal);
@@ -3911,7 +4024,7 @@
       }
 
       async function loadCloudProfiles() {
-        const profiles = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,created_at&order=name.asc");
+        const profiles = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,delete_password,created_at&order=name.asc");
         cloudProfiles = Array.isArray(profiles) ? profiles : [];
         if (cloudProfile) {
           cloudProfile = cloudProfiles.find(profile => profile.id === cloudProfile.id) || null;
@@ -3932,20 +4045,26 @@
 
       async function createCloudProfile() {
         const name = ids.cloudProfileName.value.trim();
+        const deletePassword = ids.cloudProfilePassword.value.trim();
         if (!name) {
           showToast("Profilname fehlt.");
+          return;
+        }
+        if (!deletePassword) {
+          showToast("Löschpasswort fehlt.");
           return;
         }
 
         try {
           updateSyncStatus("loading");
-          const [profile] = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,created_at", {
+          const [profile] = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,delete_password,created_at", {
             method: "POST",
             headers: { Prefer: "return=representation" },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name, delete_password: deletePassword })
           });
           cloudProfile = profile;
           ids.cloudProfileName.value = "";
+          ids.cloudProfilePassword.value = "";
           await loadCloudProfiles();
           renderCloudProfiles();
           saveCloudProfile();
@@ -3993,7 +4112,7 @@
 
         try {
           updateSyncStatus("loading");
-          const [profile] = await supabaseRequest(`/rest/v1/battle_profiles?id=eq.${encodeURIComponent(cloudProfile.id)}&select=id,name,created_at`, {
+          const [profile] = await supabaseRequest(`/rest/v1/battle_profiles?id=eq.${encodeURIComponent(cloudProfile.id)}&select=id,name,delete_password,created_at`, {
             method: "PATCH",
             headers: { Prefer: "return=representation" },
             body: JSON.stringify({ name })
@@ -4017,7 +4136,14 @@
         }
 
         const name = cloudProfile.name;
-        if (!window.confirm(`Cloud-Profil "${name}" inklusive Historie wirklich löschen?`)) return;
+        const password = window.prompt(`Löschpasswort für Cloud-Profil "${name}":`);
+        if (password === null) return;
+        const storedPassword = cloudProfile.delete_password || "";
+        if (password !== "110326" && password !== storedPassword) {
+          showToast("Löschpasswort ist falsch.");
+          return;
+        }
+        if (!window.confirm(`Cloud-Profil "${name}" inklusive Historie und profilabhängiger Armeen wirklich löschen?`)) return;
 
         try {
           updateSyncStatus("loading");
@@ -4342,6 +4468,7 @@
               unit_id: unitId,
               name: profile.name,
               weapon_type: profile.typeName || "",
+              weapon_role: isProfileOptionName(profile.name) ? "profile" : "weapon",
               count: Number(node.number || 1),
               range_text: chars.Reichweite || chars.Range || "",
               attacks_text: chars.A || "",
@@ -4394,6 +4521,10 @@
 
       function isWeaponProfile(profile) {
         return /waffe|weapon/i.test(profile.typeName || "");
+      }
+
+      function isProfileOptionName(name) {
+        return /^➤\s*/.test(String(name || "")) || String(name || "").includes(" - ");
       }
 
       function cleanRosterKeywordText(value) {
@@ -4528,6 +4659,7 @@
       }
 
       function weaponOptionGroupKey(weapon) {
+        if ((weapon.weapon_role || "weapon") !== "profile") return String(weapon.id || `${weapon.name}|${weapon.weapon_type}`);
         const parts = String(weapon.id || "").split("::");
         if (parts.length >= 3) return parts.slice(0, 3).join("::");
         const name = cleanWeaponName(weapon.name);
@@ -4671,10 +4803,8 @@
       }
 
       async function loadArmyRosters() {
-        const profileFilter = cloudProfile
-          ? `&or=(profile_id.is.null,profile_id.eq.${encodeURIComponent(cloudProfile.id)})`
-          : "&profile_id=is.null";
-        return await supabaseRequest(`/rest/v1/army_rosters?select=id,name,profile_id${profileFilter}&order=name.asc`) || [];
+        if (!cloudProfile) return [];
+        return await supabaseRequest(`/rest/v1/army_rosters?select=id,name,profile_id&profile_id=eq.${encodeURIComponent(cloudProfile.id)}&order=name.asc`) || [];
       }
 
       async function refreshArmyEditorUnits() {
@@ -4683,10 +4813,10 @@
         ids.armyEditorUnitSelect.innerHTML = units.length
           ? units.map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)} (${unit.model_count}x)</option>`).join("")
           : `<option value="">Neue Einheit</option>`;
-        loadSelectedArmyEditorUnit();
+        await loadSelectedArmyEditorUnit();
       }
 
-      function loadSelectedArmyEditorUnit() {
+      async function loadSelectedArmyEditorUnit() {
         const rosterId = ids.armyEditorRosterSelect.value;
         const units = armyUnitsByRoster.get(rosterId) || [];
         const unit = units.find(item => item.id === ids.armyEditorUnitSelect.value);
@@ -4701,6 +4831,7 @@
         ids.armyEditorWounds.value = unit.wounds_per_model ? String(unit.wounds_per_model) : "";
         ids.armyEditorObjectiveControl.value = unit.objective_control || unit.objective_control === 0 ? String(unit.objective_control) : "";
         ids.armyEditorProfileName.value = unit.profile_name || "";
+        await refreshArmyEditorWeapons();
       }
 
       function clearArmyEditorUnitForm() {
@@ -4712,9 +4843,63 @@
         ids.armyEditorWounds.value = "";
         ids.armyEditorObjectiveControl.value = "";
         ids.armyEditorProfileName.value = "";
+        clearArmyEditorWeaponList();
+      }
+
+      async function refreshArmyEditorWeapons() {
+        const unitId = ids.armyEditorUnitSelect.value;
+        const weapons = await loadArmyWeapons(unitId);
+        ids.armyEditorWeaponSelect.innerHTML = weapons.length
+          ? weapons.map(weapon => `<option value="${escapeHtml(weapon.id)}">${escapeHtml(cleanWeaponName(weapon.name))} (${escapeHtml(labelWeaponType(weapon.weapon_type))})</option>`).join("")
+          : `<option value="">Neue Waffe</option>`;
+        loadSelectedArmyEditorWeapon();
+      }
+
+      function loadSelectedArmyEditorWeapon() {
+        const weapons = armyWeaponsByUnit.get(ids.armyEditorUnitSelect.value) || [];
+        const weapon = weapons.find(item => item.id === ids.armyEditorWeaponSelect.value);
+        if (!weapon) {
+          clearArmyEditorWeaponForm();
+          return;
+        }
+        ids.armyEditorWeaponName.value = cleanWeaponName(weapon.name || "");
+        ids.armyEditorWeaponType.value = weaponMatchesAttackMode(weapon, "melee") ? "Nahkampfwaffen" : "Fernkampfwaffe";
+        ids.armyEditorWeaponRole.value = weapon.weapon_role || weapon.weaponRole || "weapon";
+        ids.armyEditorWeaponCount.value = String(weapon.count || 1);
+        ids.armyEditorWeaponRange.value = weapon.range_text || "";
+        ids.armyEditorWeaponAttacks.value = weapon.attacks_text || "";
+        ids.armyEditorWeaponSkill.value = weapon.skill_text || "";
+        ids.armyEditorWeaponStrength.value = weapon.strength_text || "";
+        ids.armyEditorWeaponAp.value = weapon.ap_text || "";
+        ids.armyEditorWeaponDamage.value = weapon.damage_text || "";
+        ids.armyEditorWeaponKeywords.value = (weapon.keywords || []).join(", ");
+      }
+
+      function clearArmyEditorWeaponForm() {
+        ids.armyEditorWeaponSelect.value = "";
+        ids.armyEditorWeaponName.value = "";
+        ids.armyEditorWeaponType.value = "Fernkampfwaffe";
+        ids.armyEditorWeaponRole.value = "weapon";
+        ids.armyEditorWeaponCount.value = "1";
+        ids.armyEditorWeaponRange.value = "";
+        ids.armyEditorWeaponAttacks.value = "";
+        ids.armyEditorWeaponSkill.value = "";
+        ids.armyEditorWeaponStrength.value = "";
+        ids.armyEditorWeaponAp.value = "";
+        ids.armyEditorWeaponDamage.value = "";
+        ids.armyEditorWeaponKeywords.value = "";
+      }
+
+      function clearArmyEditorWeaponList() {
+        ids.armyEditorWeaponSelect.innerHTML = `<option value="">Neue Waffe</option>`;
+        clearArmyEditorWeaponForm();
       }
 
       async function createArmyEditorRoster() {
+        if (!cloudProfile) {
+          showToast("Bitte zuerst ein Cloud-Profil auswählen oder anlegen.");
+          return;
+        }
         const name = ids.armyEditorRosterName.value.trim();
         if (!name) {
           showToast("Name der neuen Armee fehlt.");
@@ -4727,7 +4912,7 @@
             headers: { Prefer: "return=minimal" },
             body: JSON.stringify({
               id,
-              profile_id: cloudProfile?.id || null,
+              profile_id: cloudProfile.id,
               name,
               source_file: "manual",
               catalogue_name: name,
@@ -4764,6 +4949,7 @@
         }
 
         const existingId = ids.armyEditorUnitSelect.value;
+        const nextUnitId = existingId || `manual-unit-${createId()}`;
         const editablePayload = {
           roster_id: rosterId,
           name,
@@ -4788,7 +4974,7 @@
               method: "POST",
               headers: { Prefer: "return=minimal" },
               body: JSON.stringify({
-                id: `manual-unit-${createId()}`,
+                id: nextUnitId,
                 ...editablePayload,
                 source_file: "manual",
                 raw_selection: { manual: true, createdAt: new Date().toISOString() }
@@ -4798,6 +4984,8 @@
           await refreshArmyData();
           ids.armyEditorRosterSelect.value = rosterId;
           await refreshArmyEditorUnits();
+          ids.armyEditorUnitSelect.value = nextUnitId;
+          await loadSelectedArmyEditorUnit();
           showToast("Einheit gespeichert.");
         } catch {
           showToast("Einheit konnte nicht gespeichert werden.");
@@ -4822,6 +5010,96 @@
           showToast("Einheit gelöscht.");
         } catch {
           showToast("Einheit konnte nicht gelöscht werden.");
+        }
+      }
+
+      async function saveArmyEditorWeapon() {
+        const rosterId = ids.armyEditorRosterSelect.value;
+        const unitId = ids.armyEditorUnitSelect.value;
+        const name = ids.armyEditorWeaponName.value.trim();
+        const count = parsePositiveInt(ids.armyEditorWeaponCount.value);
+        const weaponType = ids.armyEditorWeaponType.value;
+        const weaponRole = ids.armyEditorWeaponRole.value;
+        const rangeText = ids.armyEditorWeaponRange.value.trim();
+        const attacksText = ids.armyEditorWeaponAttacks.value.trim();
+        const skillText = ids.armyEditorWeaponSkill.value.trim();
+        const strengthText = ids.armyEditorWeaponStrength.value.trim();
+        const apText = ids.armyEditorWeaponAp.value.trim();
+        const damageText = ids.armyEditorWeaponDamage.value.trim();
+        const keywords = cleanRosterKeywordText(ids.armyEditorWeaponKeywords.value);
+
+        if (!rosterId || !unitId) {
+          showToast("Bitte zuerst eine Einheit auswählen oder speichern.");
+          return;
+        }
+        if (!name || count === null || !attacksText || !strengthText || !apText || !damageText) {
+          showToast("Bitte Waffe vollständig und gültig ausfüllen.");
+          return;
+        }
+
+        const existingId = ids.armyEditorWeaponSelect.value;
+        const nextWeaponId = existingId || `manual-weapon-${createId()}`;
+        const payload = {
+          roster_id: rosterId,
+          unit_id: unitId,
+          name,
+          weapon_type: weaponType,
+          weapon_role: weaponRole,
+          count,
+          range_text: rangeText || (weaponType === "Nahkampfwaffen" ? "Nahkampf" : ""),
+          attacks_text: attacksText,
+          skill_text: skillText,
+          strength_text: strengthText,
+          ap_text: apText,
+          damage_text: damageText,
+          keywords,
+          raw_profile: { manual: true, role: weaponRole, updatedAt: new Date().toISOString() },
+          updated_at: new Date().toISOString()
+        };
+
+        try {
+          if (existingId) {
+            await supabaseRequest(`/rest/v1/army_weapons?id=eq.${encodeURIComponent(existingId)}`, {
+              method: "PATCH",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify(payload)
+            });
+          } else {
+            await supabaseRequest("/rest/v1/army_weapons", {
+              method: "POST",
+              headers: { Prefer: "return=minimal" },
+              body: JSON.stringify({ id: nextWeaponId, ...payload })
+            });
+          }
+          armyWeaponsByUnit.delete(unitId);
+          await refreshArmyEditorWeapons();
+          ids.armyEditorWeaponSelect.value = nextWeaponId;
+          loadSelectedArmyEditorWeapon();
+          await renderArmyWeapons();
+          showToast("Waffe gespeichert.");
+        } catch {
+          showToast("Waffe konnte nicht gespeichert werden.");
+        }
+      }
+
+      async function deleteArmyEditorWeapon() {
+        const weaponId = ids.armyEditorWeaponSelect.value;
+        const unitId = ids.armyEditorUnitSelect.value;
+        if (!weaponId) {
+          showToast("Keine Waffe ausgewählt.");
+          return;
+        }
+        if (!window.confirm("Waffe wirklich aus der Cloud-Datenbank löschen?")) return;
+        try {
+          await supabaseRequest(`/rest/v1/army_weapons?id=eq.${encodeURIComponent(weaponId)}`, {
+            method: "DELETE"
+          });
+          armyWeaponsByUnit.delete(unitId);
+          await refreshArmyEditorWeapons();
+          await renderArmyWeapons();
+          showToast("Waffe gelöscht.");
+        } catch {
+          showToast("Waffe konnte nicht gelöscht werden.");
         }
       }
 
@@ -4871,7 +5149,7 @@
       async function loadArmyWeapons(unitId) {
         if (!unitId) return [];
         if (armyWeaponsByUnit.has(unitId)) return armyWeaponsByUnit.get(unitId);
-        const weapons = await supabaseRequest(`/rest/v1/army_weapons?select=id,name,weapon_type,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`) || [];
+        const weapons = await supabaseRequest(`/rest/v1/army_weapons?select=id,name,weapon_type,weapon_role,count,range_text,attacks_text,skill_text,strength_text,ap_text,damage_text,keywords&unit_id=eq.${encodeURIComponent(unitId)}&order=name.asc`) || [];
         armyWeaponsByUnit.set(unitId, weapons);
         return weapons;
       }
@@ -5068,6 +5346,10 @@
 
       function cleanWeaponName(value) {
         return String(value || "").replace(/^➤\s*/, "");
+      }
+
+      function labelWeaponType(value) {
+        return weaponMatchesAttackMode({ weapon_type: value, range_text: "" }, "melee") ? "Nahkampf" : "Fernkampf";
       }
 
       function sumValues(items, fn) {
