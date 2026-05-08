@@ -1051,28 +1051,7 @@
 
         <div class="menu-section">
           <div class="menu-section-title">Cloud</div>
-          <div class="cloud-profile">
-            <div class="field">
-              <label for="cloudProfileSelect">Cloud-Profil</label>
-              <select id="cloudProfileSelect">
-                <option value="">Nur lokal</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="cloudProfileName">Neues Profil</label>
-              <input id="cloudProfileName" type="text" autocomplete="off" placeholder="z. B. Tim" />
-            </div>
-            <div class="field">
-              <label for="cloudProfilePassword">Löschpasswort</label>
-              <input id="cloudProfilePassword" type="password" autocomplete="new-password" placeholder="für Profil löschen" />
-            </div>
-            <button type="button" id="cloudProfileCreateBtn">Anlegen</button>
-          </div>
-          <div class="standalone-action-group">
-            <button type="button" id="cloudProfilesRefreshBtn">Neu laden</button>
-            <button type="button" id="cloudProfileRenameBtn">Umbenennen</button>
-            <button type="button" id="cloudProfileDeleteBtn" class="warn">Profil löschen</button>
-          </div>
+          <button type="button" id="cloudProfileOpenBtn">Cloudprofil</button>
         </div>
 
         <div class="menu-section">
@@ -1401,6 +1380,45 @@
     </div>
   </div>
 
+  <div id="cloudProfileModal" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cloudProfileModalTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="cloudProfileModalTitle">Cloudprofil</h2>
+          <div class="muted">Cloud-Historie, Armeen und Sync-Profil verwalten.</div>
+        </div>
+        <button type="button" id="cloudProfileCloseBtn" class="modal-close">Schließen</button>
+      </div>
+
+      <div class="stack">
+        <section class="mini-card">
+          <div class="grid two">
+            <div class="field">
+              <label for="cloudProfileSelect">Cloud-Profil</label>
+              <select id="cloudProfileSelect">
+                <option value="">Nur lokal</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cloudProfileName">Neues Profil</label>
+              <input id="cloudProfileName" type="text" autocomplete="off" placeholder="z. B. Tim" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="cloudProfilePassword">Löschpasswort</label>
+            <input id="cloudProfilePassword" type="password" autocomplete="new-password" placeholder="für Profil löschen" />
+          </div>
+          <div class="button-row core-actions">
+            <button type="button" id="cloudProfileCreateBtn" class="primary">Anlegen</button>
+            <button type="button" id="cloudProfilesRefreshBtn">Neu laden</button>
+            <button type="button" id="cloudProfileRenameBtn">Umbenennen</button>
+            <button type="button" id="cloudProfileDeleteBtn" class="warn">Profil löschen</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <div id="armyEditorModal" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="armyEditorTitle">
       <div class="modal-head">
@@ -1712,6 +1730,9 @@
         exportHistoryBtn: document.getElementById("exportHistoryBtn"),
         importHistoryBtn: document.getElementById("importHistoryBtn"),
         importHistoryFile: document.getElementById("importHistoryFile"),
+        cloudProfileOpenBtn: document.getElementById("cloudProfileOpenBtn"),
+        cloudProfileModal: document.getElementById("cloudProfileModal"),
+        cloudProfileCloseBtn: document.getElementById("cloudProfileCloseBtn"),
         cloudProfileSelect: document.getElementById("cloudProfileSelect"),
         cloudProfileName: document.getElementById("cloudProfileName"),
         cloudProfilePassword: document.getElementById("cloudProfilePassword"),
@@ -1925,24 +1946,20 @@
           renderCompareModal();
         });
 
+        ids.cloudProfileOpenBtn.addEventListener("click", () => {
+          openCloudProfileModal();
+        });
+
+        ids.cloudProfileCloseBtn.addEventListener("click", () => {
+          closeCloudProfileModal();
+        });
+
+        ids.cloudProfileModal.addEventListener("click", event => {
+          if (event.target === ids.cloudProfileModal) closeCloudProfileModal();
+        });
+
         ids.cloudProfileSelect.addEventListener("change", async () => {
-          const selectedId = ids.cloudProfileSelect.value;
-          cloudProfile = cloudProfiles.find(profile => profile.id === selectedId) || null;
-          saveCloudProfile();
-          updateSyncStatus("loading");
-          if (!cloudProfile) {
-            historyEntries = loadHistory();
-            compareSelection = [];
-            openHistoryId = null;
-            editingHistoryId = null;
-            await refreshArmyData();
-            renderHistory();
-            updateSyncStatus();
-            showToast("Lokale Historie aktiv.");
-            return;
-          }
-          await loadCloudHistory();
-          await refreshArmyData();
+          await selectCloudProfile(ids.cloudProfileSelect.value);
         });
 
         ids.cloudProfileCreateBtn.addEventListener("click", async () => {
@@ -4023,6 +4040,37 @@
         }
       }
 
+      function openCloudProfileModal() {
+        closeFloatingMenu();
+        ids.cloudProfileModal.classList.add("show");
+        ids.cloudProfileModal.setAttribute("aria-hidden", "false");
+        renderCloudProfiles();
+      }
+
+      function closeCloudProfileModal() {
+        ids.cloudProfileModal.classList.remove("show");
+        ids.cloudProfileModal.setAttribute("aria-hidden", "true");
+      }
+
+      async function selectCloudProfile(selectedId) {
+        cloudProfile = cloudProfiles.find(profile => profile.id === selectedId) || null;
+        saveCloudProfile();
+        updateSyncStatus("loading");
+        if (!cloudProfile) {
+          historyEntries = loadHistory();
+          compareSelection = [];
+          openHistoryId = null;
+          editingHistoryId = null;
+          await refreshArmyData();
+          renderHistory();
+          updateSyncStatus();
+          showToast("Lokale Historie aktiv.");
+          return;
+        }
+        await loadCloudHistory();
+        await refreshArmyData();
+      }
+
       async function loadCloudProfiles() {
         const profiles = await supabaseRequest("/rest/v1/battle_profiles?select=id,name,delete_password,created_at&order=name.asc");
         cloudProfiles = Array.isArray(profiles) ? profiles : [];
@@ -5401,13 +5449,13 @@
 
         if (state === "error") {
           ids.syncStatusText.textContent = "Nicht gesynct";
-          ids.syncStatusTime.textContent = message || "Letzter Cloud-Vorgang fehlgeschlagen.";
+          ids.syncStatusTime.textContent = `Profil: ${cloudProfile.name} · ${message || "Letzter Cloud-Vorgang fehlgeschlagen."}`;
           return;
         }
 
         ids.syncStatusText.textContent = "Gesynct";
         ids.syncStatusTime.textContent = lastSyncedAt
-          ? `Zuletzt: ${formatDate(lastSyncedAt)}`
+          ? `Profil: ${cloudProfile.name} · Zuletzt: ${formatDate(lastSyncedAt)}`
           : `Profil: ${cloudProfile.name}, noch kein Sync.`;
       }
 
