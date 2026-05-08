@@ -120,7 +120,7 @@
 
     .input-mode-toggle {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
       margin-bottom: 12px;
     }
@@ -156,6 +156,10 @@
     }
 
     .input-collapsed.input-selection-mode .army-selection-body {
+      display: none;
+    }
+
+    .input-collapsed > .card-title {
       display: none;
     }
 
@@ -1071,7 +1075,6 @@
 
         <div class="menu-section">
           <div class="menu-section-title">Armeen</div>
-          <button type="button" id="armyCompareOpenBtn">Armeen vergleichen</button>
           <button type="button" id="armyImportBtn">Armeeliste importieren</button>
           <button type="button" id="armyEditorOpenBtn">Einheiten bearbeiten</button>
           <input type="file" id="armyImportFile" accept="application/json,.json" class="hidden" />
@@ -1098,6 +1101,7 @@
           <div class="input-mode-toggle" role="group" aria-label="Eingabemodus">
             <button type="button" id="inputModeManualBtn" class="active">Manuell</button>
             <button type="button" id="inputModeArmyBtn">Auswahl</button>
+            <button type="button" id="inputModeCompareBtn">Armeevergleich</button>
           </div>
 
           <div id="inputBody" class="input-body">
@@ -1668,6 +1672,7 @@
         inputToggleBtn: document.getElementById("inputToggleBtn"),
         inputModeManualBtn: document.getElementById("inputModeManualBtn"),
         inputModeArmyBtn: document.getElementById("inputModeArmyBtn"),
+        inputModeCompareBtn: document.getElementById("inputModeCompareBtn"),
         toast: document.getElementById("toast"),
         menuToggleBtn: document.getElementById("menuToggleBtn"),
         floatingMenuPanel: document.getElementById("floatingMenuPanel"),
@@ -1684,7 +1689,6 @@
         comparePickerList: document.getElementById("comparePickerList"),
         compareTableContainer: document.getElementById("compareTableContainer"),
         compareSelectionInfo: document.getElementById("compareSelectionInfo"),
-        armyCompareOpenBtn: document.getElementById("armyCompareOpenBtn"),
         armyCompareModal: document.getElementById("armyCompareModal"),
         armyCompareCloseBtn: document.getElementById("armyCompareCloseBtn"),
         armyCompareOwnRoster: document.getElementById("armyCompareOwnRoster"),
@@ -1803,6 +1807,7 @@
       renderModeFields("damage");
       applyBaseProfile();
       wireUi();
+      setInputCollapsed(true);
       restoreAccordionState();
       updateSectionSummaries();
       renderHistory();
@@ -1842,10 +1847,18 @@
 
         ids.inputModeManualBtn.addEventListener("click", () => {
           setInputMode("manual");
+          setInputCollapsed(false);
         });
 
         ids.inputModeArmyBtn.addEventListener("click", () => {
           setInputMode("army");
+          setInputCollapsed(false);
+        });
+
+        ids.inputModeCompareBtn.addEventListener("click", () => {
+          setInputMode("compare");
+          setInputCollapsed(true);
+          openArmyCompare();
         });
 
         document.addEventListener("click", event => {
@@ -2070,10 +2083,6 @@
           renderCompareModal();
         });
 
-        ids.armyCompareOpenBtn.addEventListener("click", () => {
-          openArmyCompare();
-        });
-
         ids.armyCompareCloseBtn.addEventListener("click", () => {
           closeArmyCompare();
         });
@@ -2209,6 +2218,10 @@
 
       function toggleInputCollapsed() {
         const collapsed = !ids.form.classList.contains("input-collapsed");
+        setInputCollapsed(collapsed);
+      }
+
+      function setInputCollapsed(collapsed) {
         ids.form.classList.toggle("input-collapsed", collapsed);
         ids.inputToggleBtn.textContent = collapsed ? "Eingabe öffnen" : "Eingabe schließen";
         ids.inputToggleBtn.setAttribute("aria-expanded", String(!collapsed));
@@ -2217,9 +2230,11 @@
 
       function setInputMode(mode) {
         const armyMode = mode === "army";
+        const compareMode = mode === "compare";
         ids.form.classList.toggle("input-selection-mode", armyMode);
-        ids.inputModeManualBtn.classList.toggle("active", !armyMode);
+        ids.inputModeManualBtn.classList.toggle("active", mode === "manual");
         ids.inputModeArmyBtn.classList.toggle("active", armyMode);
+        ids.inputModeCompareBtn.classList.toggle("active", compareMode);
       }
 
       function jumpBetweenInputAndResult() {
@@ -2370,9 +2385,7 @@
         openHistoryId = entry.id;
         setInputMode("manual");
         loadInputsIntoForm(entry.inputs);
-        ids.form.classList.remove("input-collapsed");
-        ids.inputToggleBtn.textContent = "Eingabe schließen";
-        ids.inputToggleBtn.setAttribute("aria-expanded", "true");
+        setInputCollapsed(false);
         scrollToElement(ids.form);
         renderHistory();
         showToast("Bearbeitungsmodus aktiv. Berechnen aktualisiert dieses Ergebnis.");
