@@ -171,15 +171,15 @@
     }
 
     .army-only {
-      display: none;
+      display: none !important;
     }
 
     .input-selection-mode .manual-only {
-      display: none;
+      display: none !important;
     }
 
     .input-selection-mode .army-only {
-      display: flex;
+      display: flex !important;
     }
 
     .input-collapsed.input-selection-mode .army-selection-body {
@@ -1236,6 +1236,10 @@
                 <select id="armyCompareEnemyRoster"></select>
               </div>
             </div>
+            <div class="field">
+              <label for="armyCompareThreshold">Schadensgrenze in %</label>
+              <input id="armyCompareThreshold" type="number" min="1" max="99" step="1" inputmode="numeric" value="65" />
+            </div>
             <details class="mini-details" open>
               <summary>
                 <div class="meta-row">
@@ -1350,6 +1354,13 @@
                     <label for="fnpTarget">Feel No Pain</label>
                     <select id="fnpTarget"></select>
                   </div>
+                  <div class="field">
+                    <label for="fnpScope">Wirkt auf</label>
+                    <select id="fnpScope">
+                      <option value="all">jeden Schaden</option>
+                      <option value="dev">nur verheerende Verwundungen</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -1404,6 +1415,7 @@
 
           <div class="button-row core-actions army-only">
             <button type="button" id="armyCalculateBtn" class="primary">Aus Armee berechnen</button>
+            <button type="button" id="armyResetBtn">Reset</button>
           </div>
         </section>
 
@@ -1529,6 +1541,7 @@
           </div>
           <div class="button-row core-actions">
             <button type="button" id="armyEditorCreateRosterBtn" class="primary">Armee hinzufügen</button>
+            <button type="button" id="armyEditorDeleteRosterBtn" class="warn">Armee löschen</button>
           </div>
         </section>
 
@@ -1779,6 +1792,7 @@
         armyCompareCloseBtn: document.getElementById("armyCompareCloseBtn"),
         armyCompareOwnRoster: document.getElementById("armyCompareOwnRoster"),
         armyCompareEnemyRoster: document.getElementById("armyCompareEnemyRoster"),
+        armyCompareThreshold: document.getElementById("armyCompareThreshold"),
         armyCompareEnemyFilters: document.getElementById("armyCompareEnemyFilters"),
         armyCompareRunBtn: document.getElementById("armyCompareRunBtn"),
         armyCompareStatus: document.getElementById("armyCompareStatus"),
@@ -1793,6 +1807,7 @@
         armyEditorRosterSelect: document.getElementById("armyEditorRosterSelect"),
         armyEditorRosterName: document.getElementById("armyEditorRosterName"),
         armyEditorCreateRosterBtn: document.getElementById("armyEditorCreateRosterBtn"),
+        armyEditorDeleteRosterBtn: document.getElementById("armyEditorDeleteRosterBtn"),
         armyEditorUnitSelect: document.getElementById("armyEditorUnitSelect"),
         armyEditorUnitName: document.getElementById("armyEditorUnitName"),
         armyEditorModelCount: document.getElementById("armyEditorModelCount"),
@@ -1839,6 +1854,7 @@
         armyTargetRoster: document.getElementById("armyTargetRoster"),
         armyTargetUnit: document.getElementById("armyTargetUnit"),
         armyCalculateBtn: document.getElementById("armyCalculateBtn"),
+        armyResetBtn: document.getElementById("armyResetBtn"),
         addManualWeaponBtn: document.getElementById("addManualWeaponBtn"),
         manualWeaponList: document.getElementById("manualWeaponList"),
         attackMode: document.getElementById("attackMode"),
@@ -1867,6 +1883,7 @@
         fnpEnabled: document.getElementById("fnpEnabled"),
         fnpFields: document.getElementById("fnpFields"),
         fnpTarget: document.getElementById("fnpTarget"),
+        fnpScope: document.getElementById("fnpScope"),
         preDamageEnabled: document.getElementById("preDamageEnabled"),
         preDamageFields: document.getElementById("preDamageFields"),
         preDamageValue: document.getElementById("preDamageValue"),
@@ -2003,6 +2020,7 @@
           ids.woundReroll,
           ids.devCrit,
           ids.fnpTarget,
+          ids.fnpScope,
           ids.preDamageValue,
           ids.modelCount,
           ids.woundsPerModel
@@ -2115,6 +2133,11 @@
 
         ids.armyCalculateBtn.addEventListener("click", () => {
           calculateFromArmySelection();
+        });
+
+        ids.armyResetBtn.addEventListener("click", async () => {
+          await refreshArmyData();
+          clearErrors();
         });
 
         ids.clearHistoryBtn.addEventListener("click", async () => {
@@ -2253,6 +2276,10 @@
 
         ids.armyEditorCreateRosterBtn.addEventListener("click", async () => {
           await createArmyEditorRoster();
+        });
+
+        ids.armyEditorDeleteRosterBtn.addEventListener("click", async () => {
+          await deleteArmyEditorRoster();
         });
 
         ids.armyEditorNewUnitBtn.addEventListener("click", () => {
@@ -2436,6 +2463,7 @@
         ids.fnpEnabled.checked = false;
         ids.fnpFields.classList.add("hidden");
         ids.fnpTarget.value = "5";
+        ids.fnpScope.value = "all";
 
         ids.preDamageEnabled.checked = false;
         ids.preDamageFields.classList.add("hidden");
@@ -2490,6 +2518,7 @@
         ids.fnpEnabled.checked = formInputs.fnp.enabled;
         ids.fnpFields.classList.toggle("hidden", !formInputs.fnp.enabled);
         ids.fnpTarget.value = String(formInputs.fnp.target ?? 5);
+        ids.fnpScope.value = formInputs.fnp.scope || "all";
 
         ids.preDamageEnabled.checked = Boolean(inputs.preDamage?.enabled);
         ids.preDamageFields.classList.toggle("hidden", !inputs.preDamage?.enabled);
@@ -2593,6 +2622,7 @@
 
         if (data.fnp.enabled) {
           data.fnp.target = parseBoundedInt(ids.fnpTarget.value, 2, 6);
+          data.fnp.scope = ids.fnpScope.value || "all";
           if (data.fnp.target === null) errors.push("Feel No Pain muss zwischen 2+ und 6+ liegen.");
         }
 
@@ -2650,7 +2680,8 @@
           },
           fnp: {
             enabled: ids.fnpEnabled.checked,
-            target: null
+            target: null,
+            scope: ids.fnpScope.value || "all"
           },
           preDamage: {
             enabled: ids.preDamageEnabled.checked,
@@ -2679,6 +2710,7 @@
 
         if (data.fnp.enabled) {
           data.fnp.target = parseBoundedInt(ids.fnpTarget.value, 2, 6);
+          data.fnp.scope = ids.fnpScope.value || "all";
           if (data.fnp.target === null) errors.push("Feel No Pain muss zwischen 2+ und 6+ liegen.");
         }
 
@@ -2756,7 +2788,7 @@
 
         const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
         const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
-        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
+        const damagePerUnsaved = buildFnpDamageDistributions(rawDamageDist, data.fnp);
 
         const hitBranches = buildHitBranchProbabilities(data);
         const woundOutcome = buildWoundOutcomeProbabilities(data);
@@ -2772,14 +2804,15 @@
             woundOutcome.dev,
             saveSuccessProbability,
             saveFailProbability,
-            finalDamagePerUnsaved
+            damagePerUnsaved.normal,
+            damagePerUnsaved.dev
           )
         };
 
         const autoWound = {
           woundCountDist: [0, 1],
           unsavedCountDist: [saveSuccessProbability, saveFailProbability],
-          damageDist: buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved)
+          damageDist: buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, damagePerUnsaved.normal)
         };
 
         const perAttack = buildPerAttackDistributions(hitBranches, normalHit, autoWound, data.sustained);
@@ -2802,7 +2835,7 @@
 
         return {
           expected,
-          trace: buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults),
+          trace: buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, damagePerUnsaved, expected, killResults),
           distributions: {
             unsaved: totalUnsaved,
             damage: totalDamage,
@@ -2819,11 +2852,11 @@
       function calculateAllWithSingleRerolls(data) {
         const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
         const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
-        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
+        const damagePerUnsaved = buildFnpDamageDistributions(rawDamageDist, data.fnp);
         const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
         const saveSuccessProbability = 1 - saveFailProbability;
 
-        const stats = buildTotalStatsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved);
+        const stats = buildTotalStatsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, damagePerUnsaved);
         const expected = {
           hits: expectedValue(stats.hits),
           wounds: expectedValue(stats.wounds),
@@ -2832,12 +2865,12 @@
         };
 
         const killResults = data.targetProfile
-          ? buildKillResultsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved)
+          ? buildKillResultsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, damagePerUnsaved)
           : null;
 
         return {
           expected,
-          trace: buildSingleRerollTrace(data, attackCountDist, finalDamagePerUnsaved, expected, killResults),
+          trace: buildSingleRerollTrace(data, attackCountDist, damagePerUnsaved, expected, killResults),
           distributions: {
             unsaved: stats.unsaved,
             damage: stats.damage,
@@ -2910,18 +2943,23 @@
         });
 
         const killDistribution = Array(modelCount + 1).fill(0);
+        const effectiveDamageDistribution = Array(modelCount * woundsPerModel + 1).fill(0);
         let expectedEffectiveDamage = 0;
         for (let kills = 0; kills <= modelCount; kills += 1) {
           for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
             const probability = stateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
             if (probability < EPSILON) continue;
             killDistribution[kills] += probability;
-            expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+            const effectiveDamage = Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+            effectiveDamageDistribution[effectiveDamage] += probability;
+            expectedEffectiveDamage += probability * effectiveDamage;
           }
         }
 
         return {
           killDistribution: trimDistribution(killDistribution),
+          effectiveDamageDistribution: trimDistribution(effectiveDamageDistribution),
+          expectedEffectiveDamage,
           expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
         };
       }
@@ -2931,7 +2969,7 @@
 
         const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
         const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
-        const finalDamagePerUnsaved = applyFnpToDamage(rawDamageDist, data.fnp);
+        const damagePerUnsaved = buildFnpDamageDistributions(rawDamageDist, data.fnp);
         const hitBranches = buildHitBranchProbabilities(data);
         const woundOutcome = buildWoundOutcomeProbabilities(data);
         const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
@@ -2942,9 +2980,10 @@
           woundOutcome.dev,
           saveSuccessProbability,
           saveFailProbability,
-          finalDamagePerUnsaved
+          damagePerUnsaved.normal,
+          damagePerUnsaved.dev
         );
-        const autoDamageDist = buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, finalDamagePerUnsaved);
+        const autoDamageDist = buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, damagePerUnsaved.normal);
         const { modelCount, woundsPerModel } = data.targetProfile;
         const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
         const branchSpecs = [
@@ -2976,7 +3015,7 @@
       function buildSingleRerollKillStateDistForWeapon(data, initialStateDist) {
         const attackCountDist = buildAttackCountDistribution(data.attackMode, data.attackParams);
         const rawDamageDist = buildDamageDistribution(data.damageMode, data.damageParams);
-        const damageDist = applyFnpToDamage(rawDamageDist, data.fnp);
+        const damageDist = buildFnpDamageDistributions(rawDamageDist, data.fnp);
         const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
         const saveSuccessProbability = 1 - saveFailProbability;
         const { modelCount, woundsPerModel } = data.targetProfile;
@@ -3010,14 +3049,15 @@
         return output;
       }
 
-      function buildSingleRerollTrace(data, attackCountDist, finalDamagePerUnsaved, expected, killResults) {
+      function buildSingleRerollTrace(data, attackCountDist, damagePerUnsaved, expected, killResults) {
+        const avgDamagePerUnsaved = expectedValue(getNormalDamageDistribution(damagePerUnsaved));
         const lines = [
           `Erwartete Attacken: ${formatNumber(expectedValue(attackCountDist))}`,
           `Einmalige Re-Rolls: Treffer ${data.hitReroll === "single" ? "an" : "aus"}, Verwundung ${data.woundReroll === "single" ? "an" : "aus"}`,
           `Erwartete Treffer gesamt: â‰ˆ ${formatNumber(expected.hits)}`,
           `Erwartete Verwundungen gesamt: â‰ˆ ${formatNumber(expected.wounds)}`,
           `Erwartete unsaved wounds gesamt: â‰ˆ ${formatNumber(expected.unsaved)}`,
-          `Erwarteter Schaden pro unsaved wound nach FNP: ${formatNumber(expectedValue(finalDamagePerUnsaved))}`,
+          `Erwarteter Schaden pro normalem unsaved wound nach FNP: ${formatNumber(avgDamagePerUnsaved)}`,
           `Erwarteter Gesamtschaden: â‰ˆ ${formatNumber(expected.damage)}`
         ];
 
@@ -3095,15 +3135,20 @@
         }
 
         const killDistribution = Array(modelCount + 1).fill(0);
+        const effectiveDamageDistribution = Array(modelCount * woundsPerModel + 1).fill(0);
         let expectedEffectiveDamage = 0;
         total.forEach((probability, key) => {
           const state = parseKillStateKey(key);
           killDistribution[state.kills] += probability;
-          expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, state.kills * woundsPerModel + state.remainder);
+          const effectiveDamage = Math.min(modelCount * woundsPerModel, state.kills * woundsPerModel + state.remainder);
+          effectiveDamageDistribution[effectiveDamage] += probability;
+          expectedEffectiveDamage += probability * effectiveDamage;
         });
 
         return {
           killDistribution: trimDistribution(killDistribution),
+          effectiveDamageDistribution: trimDistribution(effectiveDamageDistribution),
+          expectedEffectiveDamage,
           expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
         };
       }
@@ -3214,15 +3259,16 @@
         }
 
         const wounded = { ...state, wounds: state.wounds + 1 };
+        const selectedDamageDist = kind === "dev" ? getDevDamageDistribution(damageDist) : getNormalDamageDistribution(damageDist);
         if (kind === "dev") {
-          damageDist.forEach((damageProbability, damage) => {
+          selectedDamageDist.forEach((damageProbability, damage) => {
             if (damageProbability > EPSILON) output.push({ state: { ...wounded, unsaved: wounded.unsaved + 1, damage: wounded.damage + damage }, probability: probability * damageProbability });
           });
           return;
         }
 
         output.push({ state: wounded, probability: probability * saveSuccessProbability });
-        damageDist.forEach((damageProbability, damage) => {
+        selectedDamageDist.forEach((damageProbability, damage) => {
           if (damageProbability > EPSILON) output.push({ state: { ...wounded, unsaved: wounded.unsaved + 1, damage: wounded.damage + damage }, probability: probability * saveFailProbability * damageProbability });
         });
       }
@@ -3260,7 +3306,8 @@
 
         if (kind === "normal") output.push({ state, probability: probability * saveSuccessProbability });
         const damageProbabilityBase = kind === "dev" ? probability : probability * saveFailProbability;
-        damageDist.forEach((damageProbability, damage) => {
+        const selectedDamageDist = kind === "dev" ? getDevDamageDistribution(damageDist) : getNormalDamageDistribution(damageDist);
+        selectedDamageDist.forEach((damageProbability, damage) => {
           if (damageProbability < EPSILON) return;
           output.push({ state: applyDamageToKillState(state, damage, targetProfile), probability: damageProbabilityBase * damageProbability });
         });
@@ -3352,10 +3399,10 @@
         if (probability > EPSILON) map.set(key, (map.get(key) || 0) + probability);
       }
 
-      function buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, finalDamagePerUnsaved, expected, killResults) {
+      function buildExpectationTrace(data, attackCountDist, hitBranches, woundOutcome, saveFailProbability, damagePerUnsaved, expected, killResults) {
         const avgAttacks = expectedValue(attackCountDist);
         const avgHitsPerAttack = hitBranches.normal + hitBranches.sustainedOnly * (1 + data.sustained.value) + hitBranches.lethalOnly + hitBranches.both * (1 + data.sustained.value);
-        const avgDamagePerUnsaved = expectedValue(finalDamagePerUnsaved);
+        const avgDamagePerUnsaved = expectedValue(getNormalDamageDistribution(damagePerUnsaved));
         const unsavedChanceFromNormal = woundOutcome.normal * saveFailProbability + woundOutcome.dev;
 
         const lines = [
@@ -3365,7 +3412,7 @@
           `Erwartete Verwundungen gesamt: ≈ ${formatNumber(expected.wounds)}`,
           `Unsaved-Chance pro normal aufgelöster Wunde: ${formatPercent(unsavedChanceFromNormal)}`,
           `Erwartete unsaved wounds gesamt: ≈ ${formatNumber(expected.unsaved)}`,
-          `Erwarteter Schaden pro unsaved wound nach FNP: ${formatNumber(avgDamagePerUnsaved)}`,
+          `Erwarteter Schaden pro normalem unsaved wound nach FNP: ${formatNumber(avgDamagePerUnsaved)}`,
           `Erwarteter Gesamtschaden: ≈ ${formatNumber(expected.damage)}`
         ];
 
@@ -3407,18 +3454,23 @@
         }
 
         const killDistribution = Array(modelCount + 1).fill(0);
+        const effectiveDamageDistribution = Array(modelCount * woundsPerModel + 1).fill(0);
         let expectedEffectiveDamage = 0;
         for (let kills = 0; kills <= modelCount; kills += 1) {
           for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
             const probability = totalStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
             if (probability < EPSILON) continue;
             killDistribution[kills] += probability;
-            expectedEffectiveDamage += probability * Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+            const effectiveDamage = Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+            effectiveDamageDistribution[effectiveDamage] += probability;
+            expectedEffectiveDamage += probability * effectiveDamage;
           }
         }
 
         return {
           killDistribution: trimDistribution(killDistribution),
+          effectiveDamageDistribution: trimDistribution(effectiveDamageDistribution),
+          expectedEffectiveDamage,
           expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
         };
       }
@@ -3604,12 +3656,30 @@
         return trimDistribution(mixed);
       }
 
-      function buildDamagePerWoundAttemptDistribution(pFail, pNormal, pDev, saveSuccess, saveFail, damageDistribution) {
-        const unsavedProbability = pNormal * saveFail + pDev;
-        const distribution = Array(damageDistribution.length).fill(0);
-        distribution[0] = pFail + pNormal * saveSuccess + unsavedProbability * (damageDistribution[0] || 0);
-        for (let damage = 1; damage < damageDistribution.length; damage += 1) {
-          distribution[damage] = unsavedProbability * (damageDistribution[damage] || 0);
+      function buildFnpDamageDistributions(rawDamageDist, fnp) {
+        if (!fnp?.enabled) return { normal: rawDamageDist.slice(), dev: rawDamageDist.slice() };
+        const fnpDamage = applyFnpToDamage(rawDamageDist, fnp);
+        return {
+          normal: fnp.scope === "dev" ? rawDamageDist.slice() : fnpDamage,
+          dev: fnpDamage
+        };
+      }
+
+      function getNormalDamageDistribution(damageDist) {
+        return Array.isArray(damageDist) ? damageDist : damageDist.normal;
+      }
+
+      function getDevDamageDistribution(damageDist) {
+        return Array.isArray(damageDist) ? damageDist : damageDist.dev;
+      }
+
+      function buildDamagePerWoundAttemptDistribution(pFail, pNormal, pDev, saveSuccess, saveFail, normalDamageDistribution, devDamageDistribution = normalDamageDistribution) {
+        const maxLength = Math.max(normalDamageDistribution.length, devDamageDistribution.length);
+        const distribution = Array(maxLength).fill(0);
+        distribution[0] = pFail + pNormal * saveSuccess;
+        for (let damage = 0; damage < maxLength; damage += 1) {
+          distribution[damage] += pNormal * saveFail * (normalDamageDistribution[damage] || 0);
+          distribution[damage] += pDev * (devDamageDistribution[damage] || 0);
         }
         return trimDistribution(distribution);
       }
@@ -3971,14 +4041,20 @@
           </section>
 
           <section class="mini-card">
-            <div class="card-title">
-              <h3>Unsaved Wounds</h3>
-              <span class="muted">${weaponCount > 1 ? "Summe aller Waffen" : "eine Waffe"}</span>
-            </div>
-            <div class="distribution-hint">X: min (genau X) · ${escapeHtml(buildDamagePerUnsavedHint(inputs))}</div>
-            <div class="min-list">
-              ${buildProbabilityRows(outputs.distributions.unsaved)}
-            </div>
+            <details class="mini-details">
+              <summary>
+                <div class="meta-row">
+                  <span class="pill"><span class="summary-arrow">▶</span>Unsaved Wounds</span>
+                  <span class="muted">${weaponCount > 1 ? "Summe aller Waffen" : "eine Waffe"}</span>
+                </div>
+              </summary>
+              <div class="mini-details-body">
+                <div class="distribution-hint">X: min (genau X) · ${escapeHtml(buildDamagePerUnsavedHint(inputs))}</div>
+                <div class="min-list">
+                  ${buildProbabilityRows(outputs.distributions.unsaved)}
+                </div>
+              </div>
+            </details>
           </section>
         `;
       }
@@ -4183,7 +4259,7 @@
         if (inputs.hitReroll && inputs.hitReroll !== "none") rules.push(`RR Hit ${shortReroll(inputs.hitReroll)}`);
         if (inputs.woundReroll && inputs.woundReroll !== "none") rules.push(`RR Wound ${shortReroll(inputs.woundReroll)}`);
         if (inputs.dev.enabled) rules.push("Dev");
-        if (inputs.fnp.enabled) rules.push(`FNP ${inputs.fnp.target}+`);
+        if (inputs.fnp.enabled) rules.push(`FNP ${inputs.fnp.target}+ ${inputs.fnp.scope === "dev" ? "nur Dev" : "alle"}`);
         if (inputs.preDamage?.enabled) rules.push(`Vorschädigung ${inputs.preDamage.value}`);
         return rules.length ? rules.join(", ") : "aus";
       }
@@ -4193,6 +4269,7 @@
       }
 
       function renderInputsSummary(inputs) {
+        const specialItems = buildActiveSpecialRuleItems(inputs);
         if (Array.isArray(inputs.weapons) && inputs.weapons.length > 1) {
           const header = inputs.armySelection
             ? [
@@ -4206,7 +4283,8 @@
             `Vorschädigung: ${inputs.preDamage?.enabled ? `${inputs.preDamage.value} Schaden` : "aus"}`,
             `Zielprofil: ${inputs.targetProfile ? `${inputs.targetProfile.modelCount} Modelle, ${inputs.targetProfile.woundsPerModel} LP` : "aus"}`
           ];
-          return [...header, ...weaponItems, ...shared].map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
+          const baseShared = shared.filter(item => !item.startsWith("Feel No Pain:") && !item.startsWith("Vorsch"));
+          return [...header, ...weaponItems, ...specialItems, ...baseShared].map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
         }
         const items = [
           `Attackenmodus: ${labelAttackMode(inputs.attackMode, inputs.attackParams)}`,
@@ -4223,7 +4301,28 @@
           `Devastating Wounds: ${inputs.dev.enabled ? `an, kritisch ab ${inputs.dev.crit}+` : "aus"}`,
           `Zielprofil: ${inputs.targetProfile ? `${inputs.targetProfile.modelCount} Modelle, ${inputs.targetProfile.woundsPerModel} LP` : "aus"}`
         ];
-        return items.map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
+        const baseItems = items.filter(item =>
+          !item.startsWith("Feel No Pain:") &&
+          !item.startsWith("Vorsch") &&
+          !item.startsWith("Sustained Hits:") &&
+          !item.startsWith("Lethal Hits:") &&
+          !item.startsWith("Hit Re-Roll:") &&
+          !item.startsWith("Wound Re-Roll:") &&
+          !item.startsWith("Devastating Wounds:")
+        );
+        return [...baseItems, ...specialItems].map(item => `<div class="list-row"><span>${escapeHtml(item)}</span></div>`).join("");
+      }
+
+      function buildActiveSpecialRuleItems(inputs) {
+        const items = [];
+        if (inputs.sustained?.enabled) items.push(`Sustained Hits: X=${inputs.sustained.value}, kritisch ab ${inputs.sustained.crit}+`);
+        if (inputs.lethal?.enabled) items.push(`Lethal Hits: kritisch ab ${inputs.lethal.crit}+`);
+        if (inputs.hitReroll && inputs.hitReroll !== "none") items.push(`Hit Re-Roll: ${labelReroll(inputs.hitReroll)}`);
+        if (inputs.woundReroll && inputs.woundReroll !== "none") items.push(`Wound Re-Roll: ${labelReroll(inputs.woundReroll)}`);
+        if (inputs.dev?.enabled) items.push(`Devastating Wounds: kritisch ab ${inputs.dev.crit}+`);
+        if (inputs.fnp?.enabled) items.push(`Feel No Pain: ${inputs.fnp.target}+ (${inputs.fnp.scope === "dev" ? "nur verheerende Verwundungen" : "jeder Schaden"})`);
+        if (inputs.preDamage?.enabled) items.push(`Vorschädigung: ${inputs.preDamage.value} Schaden`);
+        return items;
       }
 
       function renderStat(label, value) {
@@ -4242,7 +4341,7 @@
         if (ids.hitReroll.value !== "none") rules.push(`RR Hit ${shortReroll(ids.hitReroll.value)}`);
         if (ids.woundReroll.value !== "none") rules.push(`RR Wound ${shortReroll(ids.woundReroll.value)}`);
         if (ids.devEnabled.checked) rules.push("Dev Wounds");
-        if (ids.fnpEnabled.checked) rules.push(`FNP ${cleanSummary(ids.fnpTarget.value, "5")}+`);
+        if (ids.fnpEnabled.checked) rules.push(`FNP ${cleanSummary(ids.fnpTarget.value, "5")}+ ${ids.fnpScope.value === "dev" ? "nur Dev" : "alle"}`);
         if (ids.preDamageEnabled.checked) rules.push(`Vorschädigung ${cleanSummary(ids.preDamageValue.value, "1")}`);
         ids.specialRulesSummary.textContent = rules.length ? rules.join(", ") : "aus";
 
@@ -4642,11 +4741,13 @@
       async function prepareArmyCompareInput() {
         ids.armyCompareStatus.textContent = "Armeen werden geladen...";
         try {
+          const previousOwnRoster = ids.armyCompareOwnRoster.value;
+          const previousEnemyRoster = ids.armyCompareEnemyRoster.value;
           await refreshArmyData();
           renderArmyRosterSelect(ids.armyCompareOwnRoster);
           renderArmyRosterSelect(ids.armyCompareEnemyRoster);
-          if (armyRosters[0]) ids.armyCompareOwnRoster.value = armyRosters[0].id;
-          if (armyRosters[1]) ids.armyCompareEnemyRoster.value = armyRosters[1].id;
+          restoreSelectValue(ids.armyCompareOwnRoster, previousOwnRoster, armyRosters[0]?.id || "");
+          restoreSelectValue(ids.armyCompareEnemyRoster, previousEnemyRoster, armyRosters[1]?.id || armyRosters[0]?.id || "");
           await renderArmyCompareEnemyFilters();
           ids.armyCompareStatus.textContent = "Wähle zwei Armeen und starte den Vergleich.";
         } catch {
@@ -4660,6 +4761,10 @@
       }
 
       async function renderArmyCompareEnemyFilters() {
+        const previousChecks = new Map(Array.from(ids.armyCompareEnemyFilters.querySelectorAll("input[type='checkbox']")).map(input => [
+          `${input.dataset.armyCompareOwnUnit ? "own" : input.dataset.armyCompareFilter}|${input.dataset.ownUnit || ""}|${input.value}`,
+          input.checked
+        ]));
         const [ownUnits, enemyUnits] = await Promise.all([
           loadArmyUnits(ids.armyCompareOwnRoster.value),
           loadArmyUnits(ids.armyCompareEnemyRoster.value)
@@ -4678,6 +4783,12 @@
               </div>
             </summary>
             <div class="mini-details-body list-stack">
+              <div class="list-row">
+                <label class="toggle-label">
+                  <input type="checkbox" data-army-compare-own-unit value="${escapeHtml(ownUnit.id)}" ${previousChecks.get(`own||${ownUnit.id}`) === false ? "" : "checked"} />
+                  Eigene Einheit berücksichtigen
+                </label>
+              </div>
               ${enemyUnits.map(enemyUnit => `
                 <div class="list-row">
                   <span>
@@ -4685,15 +4796,15 @@
                   <small>${escapeHtml(enemyUnit.model_count)} Modelle, W${escapeHtml(enemyUnit.toughness || "-")}, ${formatUnitSaves(enemyUnit)}, ${escapeHtml(enemyUnit.wounds_per_model || "-")} LP</small>
                   </span>
                   <label class="toggle-label">
-                    <input type="checkbox" data-army-compare-filter="ranged" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
+                    <input type="checkbox" data-army-compare-filter="ranged" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" ${previousChecks.get(`ranged|${ownUnit.id}|${enemyUnit.id}`) === false ? "" : "checked"} />
                     Fernkampf
                   </label>
                   <label class="toggle-label">
-                    <input type="checkbox" data-army-compare-filter="melee" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
+                    <input type="checkbox" data-army-compare-filter="melee" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" ${previousChecks.get(`melee|${ownUnit.id}|${enemyUnit.id}`) === false ? "" : "checked"} />
                     Nahkampf
                   </label>
                   <label class="toggle-label">
-                    <input type="checkbox" data-army-compare-filter="defense" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" checked />
+                    <input type="checkbox" data-army-compare-filter="defense" data-own-unit="${escapeHtml(ownUnit.id)}" value="${escapeHtml(enemyUnit.id)}" ${previousChecks.get(`defense|${ownUnit.id}|${enemyUnit.id}`) === false ? "" : "checked"} />
                     Verteidigung
                   </label>
                 </div>
@@ -4705,8 +4816,11 @@
 
       function readArmyCompareEnemyFilters(ownUnits, enemyUnits) {
         const fallbackIds = new Set(enemyUnits.map(unit => unit.id));
+        const enabledOwnIds = new Set();
         const byOwn = new Map();
         ownUnits.forEach(ownUnit => {
+          const ownToggle = ids.armyCompareEnemyFilters.querySelector(`input[data-army-compare-own-unit][value="${cssEscape(ownUnit.id)}"]`);
+          if (!ownToggle || ownToggle.checked) enabledOwnIds.add(ownUnit.id);
           const readSet = type => {
             const selector = `input[data-army-compare-filter="${type}"][data-own-unit="${cssEscape(ownUnit.id)}"]`;
             const inputs = Array.from(ids.armyCompareEnemyFilters.querySelectorAll(selector));
@@ -4719,7 +4833,7 @@
             defense: readSet("defense")
           });
         });
-        return { byOwn, fallbackIds };
+        return { byOwn, fallbackIds, enabledOwnIds };
       }
 
       async function importArmyRosterFile(file) {
@@ -4980,29 +5094,34 @@
           await Promise.all(allUnits.map(unit => loadArmyWeapons(unit.id)));
 
           const filters = readArmyCompareEnemyFilters(ownUnits, enemyUnits);
-          const ownAttacks = analyzeArmyMatchups(ownUnits, enemyUnits, {
+          const selectedOwnUnits = ownUnits.filter(unit => filters.enabledOwnIds.has(unit.id));
+          const thresholdPercent = parseBoundedInt(ids.armyCompareThreshold.value, 1, 99) || 65;
+          const probabilityTarget = thresholdPercent / 100;
+          const ownAttacks = analyzeArmyMatchups(selectedOwnUnits, enemyUnits, {
+            probabilityTarget,
             allowPair: (attacker, defender, mode) => {
               const unitFilters = filters.byOwn.get(attacker.id);
               return unitFilters ? unitFilters[mode].has(defender.id) : filters.fallbackIds.has(defender.id);
             }
           });
-          const enemyAttacks = analyzeArmyMatchups(enemyUnits, ownUnits, {
+          const enemyAttacks = analyzeArmyMatchups(enemyUnits, selectedOwnUnits, {
+            probabilityTarget,
             allowPair: (attacker, defender) => {
               const unitFilters = filters.byOwn.get(defender.id);
               return unitFilters ? unitFilters.defense.has(attacker.id) : filters.fallbackIds.has(attacker.id);
             }
           });
-          const summary = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
+          const summary = `${selectedOwnUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach ${thresholdPercent}%-Schaden im Verhältnis zum effektiven Gesamt-LP-Wert.`;
           const entry = {
             id: createId(),
             createdAt: new Date().toISOString(),
             title: `${ownRoster?.name || "Eigene Armee"} → ${enemyRoster?.name || "Gegnerische Armee"}`,
             summary,
-            html: renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks),
+            html: renderArmyCompareResults(selectedOwnUnits, ownAttacks, enemyAttacks),
             searchText: [
               ownRoster?.name || "",
               enemyRoster?.name || "",
-              ownUnits.map(unit => unit.name).join(" "),
+              selectedOwnUnits.map(unit => unit.name).join(" "),
               enemyUnits.map(unit => unit.name).join(" "),
               summary
             ].join(" ")
@@ -5025,7 +5144,7 @@
           defenders.forEach(defender => {
             ["ranged", "melee"].forEach(mode => {
               if (options.allowPair && !options.allowPair(attacker, defender, mode)) return;
-              const result = calculateUnitAttackMode(attacker, defender, mode);
+              const result = calculateUnitAttackMode(attacker, defender, mode, options.probabilityTarget || 0.65);
               if (result) byMode[mode].push(result);
             });
           });
@@ -5034,15 +5153,18 @@
         return results;
       }
 
-      function calculateUnitAttackMode(attacker, defender, mode) {
+      function calculateUnitAttackMode(attacker, defender, mode, probabilityTarget = 0.65) {
         const weapons = (armyWeaponsByUnit.get(attacker.id) || []).filter(weapon => weaponMatchesAttackMode(weapon, mode));
-        const selectedWeapons = sortWeaponsByAttackPhase(selectBestWeaponOptions(attacker, defender, weapons));
+        const selectedWeapons = sortWeaponsByAttackPhase(selectBestWeaponOptions(attacker, defender, weapons, mode));
         if (!selectedWeapons.length) return null;
 
         const weaponEntries = selectedWeapons.map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }));
         if (weaponEntries.some(entry => !entry.ok)) return null;
         const weaponDataList = sortWeaponDataByAttackPhase(weaponEntries.map(entry => entry.data));
         const outputs = combineWeaponOutputs(weaponDataList);
+        const effectiveDamageDistribution = outputs.killResults?.effectiveDamageDistribution || outputs.distributions.damage;
+        const reliableEffectiveDamage = reliableDamageAt(effectiveDamageDistribution, probabilityTarget);
+        const expectedEffectiveDamage = outputs.killResults?.expectedEffectiveDamage ?? outputs.expected.damage;
         return {
           attacker,
           defender,
@@ -5050,8 +5172,10 @@
           weapons: selectedWeapons,
           outputs,
           expectedDamage: outputs.expected.damage,
-          reliableDamage: reliableDamageAt(outputs.distributions.damage, 0.65),
-          reliableDamageRatio: reliableDamageRatio(outputs.distributions.damage, defender),
+          expectedEffectiveDamage,
+          reliableDamage: reliableEffectiveDamage,
+          reliableDamageRatio: reliableDamageRatio(effectiveDamageDistribution, defender, probabilityTarget),
+          thresholdPercent: Math.round(probabilityTarget * 100),
           killProbability: defenderDestroyedProbability(outputs, defender)
         };
       }
@@ -5074,7 +5198,7 @@
         return weaponMatchesAttackMode(weapon, "melee") ? 1 : 0;
       }
 
-      function selectBestWeaponOptions(attacker, defender, weapons) {
+      function selectBestWeaponOptions(attacker, defender, weapons, mode = "ranged") {
         const groups = new Map();
         weapons.forEach(weapon => {
           const key = weaponOptionGroupKey(weapon);
@@ -5097,7 +5221,29 @@
             .sort((a, b) => b.damage - a.damage);
           if (ranked[0]?.damage >= 0) selected.push(ranked[0].weapon);
         });
-        return selected;
+        return mode === "ranged" ? choosePistolCompatibleWeapons(attacker, defender, selected) : selected;
+      }
+
+      function choosePistolCompatibleWeapons(attacker, defender, weapons) {
+        const pistols = weapons.filter(isPistolWeapon);
+        const nonPistols = weapons.filter(weapon => !isPistolWeapon(weapon));
+        if (!pistols.length || !nonPistols.length) return weapons;
+        const score = group => {
+          const entries = group.map(weapon => buildArmyWeaponCalculation(attacker, defender, weapon, { useCurrentFnp: false }));
+          if (entries.some(entry => !entry.ok)) return -1;
+          return combineWeaponOutputs(entries.map(entry => entry.data)).expected.damage;
+        };
+        return score(pistols) > score(nonPistols) ? pistols : nonPistols;
+      }
+
+      function isPistolWeapon(weapon) {
+        const text = [
+          weapon.name,
+          weapon.weapon_type,
+          weapon.range_text,
+          ...(weapon.keywords || [])
+        ].join(" ").toLowerCase();
+        return /pistole|pistol/.test(text);
       }
 
       function weaponOptionGroupKey(weapon) {
@@ -5118,13 +5264,22 @@
         return best;
       }
 
-      function reliableDamageRatio(distribution, defender) {
+      function reliableDamageRatio(distribution, defender, probabilityTarget = 0.65) {
         const totalWounds = unitTotalWounds(defender);
-        return totalWounds > 0 ? reliableDamageAt(distribution, 0.65) / totalWounds : 0;
+        return totalWounds > 0 ? reliableDamageAt(distribution, probabilityTarget) / totalWounds : 0;
       }
 
       function unitTotalWounds(unit) {
         return Number(unit.model_count || 1) * Number(unit.wounds_per_model || 1);
+      }
+
+      function formatEffectiveDamageOutput(value, unit) {
+        const woundsPerModel = Number(unit.wounds_per_model || 1);
+        const modelCount = Number(unit.model_count || 1);
+        const capped = Math.min(Number(value || 0), woundsPerModel * modelCount);
+        const destroyedModels = Math.min(modelCount, Math.floor(capped / woundsPerModel));
+        const spill = destroyedModels >= modelCount ? 0 : capped - destroyedModels * woundsPerModel;
+        return `${formatNumber(capped)} LP (${destroyedModels}M + ${formatNumber(spill)})`;
       }
 
       function defenderDestroyedProbability(outputs, defender) {
@@ -5143,7 +5298,7 @@
               <details class="section-details" ${index === 0 ? "open" : ""}>
                 <summary>
                   <div class="summary-head">
-                    <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(unit.name)}</span>
+                    <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(unit.name)} <small>(${escapeHtml(unit.model_count)}M x ${escapeHtml(unit.wounds_per_model || "-")} LP)</small></span>
                     <span class="section-summary-text">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(formatUnitSaves(unit))}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
                   </div>
                 </summary>
@@ -5180,7 +5335,7 @@
           b.reliableDamageRatio - a.reliableDamageRatio ||
           b.killProbability - a.killProbability ||
           b.reliableDamage - a.reliableDamage ||
-          b.expectedDamage - a.expectedDamage
+          b.expectedEffectiveDamage - a.expectedEffectiveDamage
         );
         return `
           <div class="mini-card">
@@ -5207,10 +5362,10 @@
         return `
           <div class="list-row">
             <span>
-              <strong>${escapeHtml(unit.name)}</strong><br />
-              65%-Schaden: <strong>${escapeHtml(result.reliableDamage)}</strong>,
+              <strong>${escapeHtml(unit.name)}</strong> <small>(${escapeHtml(unit.model_count)}M x ${escapeHtml(unit.wounds_per_model || "-")} LP)</small><br />
+              ${escapeHtml(result.thresholdPercent)}%-Schaden: <strong>${escapeHtml(formatEffectiveDamageOutput(result.reliableDamage, unit))}</strong>,
               LP-Anteil: <strong>${escapeHtml(formatPercent(result.reliableDamageRatio))}</strong>,
-              Erwartung: <strong>${escapeHtml(formatNumber(result.expectedDamage))}</strong>,
+              Erwartung: <strong>${escapeHtml(formatEffectiveDamageOutput(result.expectedEffectiveDamage, unit))}</strong>,
               Zerstörung: <strong>${escapeHtml(formatPercent(result.killProbability))}</strong><br />
               <small>${escapeHtml(weapons)}</small>
             </span>
@@ -5227,25 +5382,36 @@
           showToast("Cloud-Datenbank ist in dieser Umgebung nicht verfügbar.");
           return;
         }
+        const previousRoster = ids.armyEditorRosterSelect.value;
         await refreshArmyData();
         renderArmyRosterSelect(ids.armyEditorRosterSelect);
-        if (!ids.armyEditorRosterSelect.value && armyRosters[0]) ids.armyEditorRosterSelect.value = armyRosters[0].id;
+        restoreSelectValue(ids.armyEditorRosterSelect, previousRoster, armyRosters[0]?.id || "");
         await refreshArmyEditorUnits();
       }
 
       async function refreshArmyData() {
+        const previousAttackerRoster = ids.armyAttackerRoster.value;
+        const previousTargetRoster = ids.armyTargetRoster.value;
+        const previousAttackerUnit = ids.armyAttackerUnit.value;
+        const previousTargetUnit = ids.armyTargetUnit.value;
         armyUnitsByRoster.clear();
         armyWeaponsByUnit.clear();
         armyRosters = await loadArmyRosters();
         renderArmyRosterSelect(ids.armyAttackerRoster);
         renderArmyRosterSelect(ids.armyTargetRoster);
-        if (armyRosters[0]) {
-          ids.armyAttackerRoster.value = armyRosters[0].id;
-          ids.armyTargetRoster.value = armyRosters[1]?.id || armyRosters[0].id;
-        }
+        restoreSelectValue(ids.armyAttackerRoster, previousAttackerRoster, armyRosters[0]?.id || "");
+        restoreSelectValue(ids.armyTargetRoster, previousTargetRoster, armyRosters[1]?.id || armyRosters[0]?.id || "");
         await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
         await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
+        restoreSelectValue(ids.armyAttackerUnit, previousAttackerUnit, ids.armyAttackerUnit.options[0]?.value || "");
+        restoreSelectValue(ids.armyTargetUnit, previousTargetUnit, ids.armyTargetUnit.options[0]?.value || "");
         await renderArmyWeapons();
+      }
+
+      function restoreSelectValue(select, preferredValue, fallbackValue = "") {
+        const values = Array.from(select.options).map(option => option.value);
+        if (preferredValue && values.includes(preferredValue)) select.value = preferredValue;
+        else if (fallbackValue && values.includes(fallbackValue)) select.value = fallbackValue;
       }
 
       async function loadArmyRosters() {
@@ -5255,10 +5421,12 @@
 
       async function refreshArmyEditorUnits() {
         const rosterId = ids.armyEditorRosterSelect.value;
+        const previousUnit = ids.armyEditorUnitSelect.value;
         const units = await loadArmyUnits(rosterId);
         ids.armyEditorUnitSelect.innerHTML = units.length
           ? units.map(unit => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)} (${unit.model_count}x)</option>`).join("")
           : `<option value="">Neue Einheit</option>`;
+        restoreSelectValue(ids.armyEditorUnitSelect, previousUnit, units[0]?.id || "");
         await loadSelectedArmyEditorUnit();
       }
 
@@ -5296,10 +5464,12 @@
 
       async function refreshArmyEditorWeapons() {
         const unitId = ids.armyEditorUnitSelect.value;
+        const previousWeapon = ids.armyEditorWeaponSelect.value;
         const weapons = await loadArmyWeapons(unitId);
         ids.armyEditorWeaponSelect.innerHTML = weapons.length
           ? weapons.map(weapon => `<option value="${escapeHtml(weapon.id)}">${escapeHtml(cleanWeaponName(weapon.name))} (${escapeHtml(labelWeaponType(weapon.weapon_type))})</option>`).join("")
           : `<option value="">Neue Waffe</option>`;
+        restoreSelectValue(ids.armyEditorWeaponSelect, previousWeapon, weapons[0]?.id || "");
         loadSelectedArmyEditorWeapon();
       }
 
@@ -5374,6 +5544,35 @@
           showToast("Armee angelegt.");
         } catch {
           showToast("Armee konnte nicht gespeichert werden.");
+        }
+      }
+
+      async function deleteArmyEditorRoster() {
+        const rosterId = ids.armyEditorRosterSelect.value;
+        const roster = armyRosters.find(item => item.id === rosterId);
+        if (!rosterId || !roster) {
+          showToast("Keine Armee ausgewählt.");
+          return;
+        }
+        if (!window.confirm(`Armee "${roster.name}" wirklich mit allen Einheiten und Waffen löschen?`)) return;
+        try {
+          const units = await loadArmyUnits(rosterId);
+          for (const unit of units) {
+            await supabaseRequest(`/rest/v1/army_weapons?unit_id=eq.${encodeURIComponent(unit.id)}`, {
+              method: "DELETE"
+            });
+          }
+          await supabaseRequest(`/rest/v1/army_units?roster_id=eq.${encodeURIComponent(rosterId)}`, {
+            method: "DELETE"
+          });
+          await supabaseRequest(`/rest/v1/army_rosters?id=eq.${encodeURIComponent(rosterId)}`, {
+            method: "DELETE"
+          });
+          await refreshArmyEditor();
+          await refreshArmyData();
+          showToast("Armee gelöscht.");
+        } catch {
+          showToast("Armee konnte nicht gelöscht werden.");
         }
       }
 
@@ -5683,6 +5882,7 @@
       }
 
       async function renderArmyWeapons() {
+        const previousSelectedIds = new Set(Array.from(ids.armyWeaponList.querySelectorAll("input[type='checkbox']:checked")).map(input => input.value));
         const weapons = await loadArmyWeapons(ids.armyAttackerUnit.value);
         if (!weapons.length) {
           ids.armyWeaponList.innerHTML = `<div class="muted">Keine Waffen für diese Einheit gefunden.</div>`;
@@ -5691,7 +5891,7 @@
 
         ids.armyWeaponList.innerHTML = weapons.map((weapon, index) => `
           <label class="weapon-option">
-            <input type="checkbox" value="${escapeHtml(weapon.id)}" ${index === 0 ? "checked" : ""} />
+            <input type="checkbox" value="${escapeHtml(weapon.id)}" ${previousSelectedIds.size ? previousSelectedIds.has(weapon.id) ? "checked" : "" : index === 0 ? "checked" : ""} />
             <span>
               ${escapeHtml(weapon.count)}x ${escapeHtml(cleanWeaponName(weapon.name))}
               <small>${escapeHtml(weapon.attacks_text)}A, ${escapeHtml(weapon.skill_text || "auto")}, S${escapeHtml(weapon.strength_text)}, DS ${escapeHtml(weapon.ap_text)}, SW ${escapeHtml(weapon.damage_text)}${weapon.keywords?.length ? `, ${escapeHtml(weapon.keywords.join(", "))}` : ""}</small>
@@ -5713,6 +5913,10 @@
 
         if (!attacker || !target || !selectedWeapons.length) {
           showToast("Bitte Angreifer, Ziel und mindestens eine Waffe wählen.");
+          return;
+        }
+        if (selectedWeapons.some(isPistolWeapon) && selectedWeapons.some(weapon => !isPistolWeapon(weapon) && weaponMatchesAttackMode(weapon, "ranged"))) {
+          showToast("Pistolen können nicht zusammen mit anderen Fernkampfwaffen berechnet werden. Bitte Pistolen oder andere Fernkampfwaffen wählen.");
           return;
         }
         if (specialErrors.length) {
@@ -5787,7 +5991,8 @@
           },
           fnp: {
             enabled: options.useCurrentFnp === false ? false : ids.fnpEnabled.checked,
-            target: options.useCurrentFnp === false ? null : ids.fnpEnabled.checked ? parseBoundedInt(ids.fnpTarget.value, 2, 6) || 5 : null
+            target: options.useCurrentFnp === false ? null : ids.fnpEnabled.checked ? parseBoundedInt(ids.fnpTarget.value, 2, 6) || 5 : null,
+            scope: options.useCurrentFnp === false ? "all" : ids.fnpScope.value || "all"
           },
           preDamage: {
             enabled: false,
@@ -6134,6 +6339,11 @@
           ...inputs,
           hitReroll: inputs.hitReroll || "none",
           woundReroll: inputs.woundReroll || "none",
+          fnp: {
+            enabled: Boolean(inputs.fnp?.enabled),
+            target: inputs.fnp?.target ?? null,
+            scope: inputs.fnp?.scope || "all"
+          },
           preDamage: {
             enabled: Boolean(inputs.preDamage?.enabled),
             value: Number(inputs.preDamage?.value || 0)
