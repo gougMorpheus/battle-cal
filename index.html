@@ -1851,9 +1851,10 @@
           setInputCollapsed(false);
         });
 
-        ids.inputModeArmyBtn.addEventListener("click", () => {
+        ids.inputModeArmyBtn.addEventListener("click", async () => {
           setInputMode("army");
           setInputCollapsed(false);
+          await refreshArmyData();
         });
 
         ids.inputModeCompareBtn.addEventListener("click", () => {
@@ -4904,8 +4905,12 @@
         armyRosters = await loadArmyRosters();
         renderArmyRosterSelect(ids.armyAttackerRoster);
         renderArmyRosterSelect(ids.armyTargetRoster);
-        if (ids.armyAttackerRoster.value) await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
-        if (ids.armyTargetRoster.value) await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
+        if (armyRosters[0]) {
+          ids.armyAttackerRoster.value = armyRosters[0].id;
+          ids.armyTargetRoster.value = armyRosters[1]?.id || armyRosters[0].id;
+        }
+        await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
+        await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
         await renderArmyWeapons();
       }
 
@@ -5242,33 +5247,31 @@
         }
 
         try {
-          armyRosters = await loadArmyRosters();
-          renderArmyRosterSelect(ids.armyAttackerRoster);
-          renderArmyRosterSelect(ids.armyTargetRoster);
-          if (armyRosters[0]) {
-            ids.armyAttackerRoster.value = armyRosters[0].id;
-            ids.armyTargetRoster.value = armyRosters[1]?.id || armyRosters[0].id;
-            await renderArmyUnitSelect(ids.armyAttackerRoster.value, ids.armyAttackerUnit);
-            await renderArmyUnitSelect(ids.armyTargetRoster.value, ids.armyTargetUnit);
-            await renderArmyWeapons();
-          }
+          await refreshArmyData();
         } catch {
           ids.armyWeaponList.innerHTML = `<div class="muted">Armee-Daten konnten nicht geladen werden.</div>`;
         }
       }
 
       function renderArmyRosterSelect(select) {
-        select.innerHTML = armyRosters.length
-          ? armyRosters.map(roster => `<option value="${escapeHtml(roster.id)}">${escapeHtml(roster.name)}</option>`).join("")
-          : `<option value="">Keine Armeen</option>`;
+        const profileRosters = getCurrentProfileRosters();
+        select.innerHTML = profileRosters.length
+          ? profileRosters.map(roster => `<option value="${escapeHtml(roster.id)}">${escapeHtml(roster.name)}</option>`).join("")
+          : `<option value="">Keine Armeen in diesem Profil</option>`;
       }
 
       async function loadArmyUnits(rosterId) {
         if (!rosterId) return [];
+        if (!getCurrentProfileRosters().some(roster => roster.id === rosterId)) return [];
         if (armyUnitsByRoster.has(rosterId)) return armyUnitsByRoster.get(rosterId);
         const units = await supabaseRequest(`/rest/v1/army_units?select=id,roster_id,name,model_count,toughness,save,wounds_per_model,profile_name,objective_control,source_file,movement_text,leadership_text&roster_id=eq.${encodeURIComponent(rosterId)}&order=name.asc`) || [];
         armyUnitsByRoster.set(rosterId, units);
         return units;
+      }
+
+      function getCurrentProfileRosters() {
+        if (!cloudProfile) return [];
+        return armyRosters.filter(roster => roster.profile_id === cloudProfile.id);
       }
 
       async function renderArmyUnitSelect(rosterId, select) {
