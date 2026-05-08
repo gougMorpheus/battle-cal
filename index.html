@@ -3809,7 +3809,7 @@
       }
 
       function renderHistoryCard(entry, index) {
-        const title = `${labelAttackMode(entry.inputs.attackMode, entry.inputs.attackParams)}, ${entry.inputs.hitTarget}+, ${entry.inputs.woundTarget}+, ${entry.inputs.saveTarget === null ? "Kein Save" : `${entry.inputs.saveTarget}+`}, ${labelDamageMode(entry.inputs.damageMode, entry.inputs.damageParams)} #${historyEntries.length - index}`;
+        const title = buildHistoryTitle(entry, index);
         return `
           <article class="card history-card">
             <details class="history-details" data-history-id="${entry.id}" ${openHistoryId === entry.id ? "open" : ""}>
@@ -3846,7 +3846,7 @@
                 </details>
 
                 <div class="stack">
-                  ${renderOutputSections(entry.outputs)}
+                  ${renderOutputSections(entry.outputs, entry.inputs)}
                   ${entry.outputs.killResults ? renderKillSection(entry.outputs.killResults, entry.inputs) : ""}
                 </div>
               </div>
@@ -3916,12 +3916,13 @@
         `;
       }
 
-      function renderOutputSections(outputs) {
+      function renderOutputSections(outputs, inputs) {
+        const weaponCount = Array.isArray(inputs?.weapons) ? inputs.weapons.length : 1;
         return `
           <section class="mini-card">
             <div class="card-title">
               <h3>Erwartungswerte</h3>
-              <span class="muted">Block A</span>
+              <span class="muted">${weaponCount > 1 ? `Summe aus ${weaponCount} Waffen` : "Block A"}</span>
             </div>
             <div class="stats-grid">
               ${renderStat("Treffer", outputs.expected.hits)}
@@ -3946,8 +3947,9 @@
           <section class="mini-card">
             <div class="card-title">
               <h3>Unsaved Wounds</h3>
+              <span class="muted">${weaponCount > 1 ? "Summe aller Waffen" : "eine Waffe"}</span>
             </div>
-            <div class="distribution-hint">X: min (genau X)</div>
+            <div class="distribution-hint">X: min (genau X) · ${escapeHtml(buildDamagePerUnsavedHint(inputs))}</div>
             <div class="min-list">
               ${buildProbabilityRows(outputs.distributions.unsaved)}
             </div>
@@ -3956,11 +3958,12 @@
       }
 
       function renderKillSection(killResults, inputs) {
+        const weaponCount = Array.isArray(inputs?.weapons) ? inputs.weapons.length : 1;
         return `
           <section class="mini-card">
             <div class="card-title">
               <h3>Ziel-Wahrscheinlichkeiten</h3>
-              <span class="muted">${inputs.targetProfile.modelCount} Modelle mit je ${inputs.targetProfile.woundsPerModel} LP</span>
+              <span class="muted">${inputs.targetProfile.modelCount} Modelle mit je ${inputs.targetProfile.woundsPerModel} LP · ${weaponCount > 1 ? `Summe aus ${weaponCount} Waffen` : "eine Waffe"}</span>
             </div>
             <div class="stats-grid">
               <div class="stat">
@@ -3968,12 +3971,22 @@
                 <strong>${killResults.expectedKillOutput}</strong>
               </div>
             </div>
-            <div class="distribution-hint">X: min (genau X)</div>
+            <div class="distribution-hint">X: min (genau X) · ${escapeHtml(buildDamagePerUnsavedHint(inputs))}</div>
             <div class="kill-list">
               ${buildProbabilityRows(killResults.killDistribution)}
             </div>
           </section>
         `;
+      }
+
+      function buildDamagePerUnsavedHint(inputs) {
+        if (Array.isArray(inputs?.weapons) && inputs.weapons.length > 1) {
+          return `Schaden je unsaved wound: ${inputs.weapons.map((weapon, index) =>
+            `${weapon.armyWeaponName || `Waffe ${index + 1}`}: ${labelDamageMode(weapon.damageMode, weapon.damageParams)}`
+          ).join(" | ")}`;
+        }
+        if (!inputs?.damageMode || !inputs?.damageParams) return "Schaden je unsaved wound: unbekannt";
+        return `Schaden je unsaved wound: ${labelDamageMode(inputs.damageMode, inputs.damageParams)}`;
       }
 
       function buildProbabilityRows(distribution) {
