@@ -141,6 +141,11 @@
       gap: 12px;
     }
 
+    .army-compare-body {
+      display: none;
+      gap: 12px;
+    }
+
     .input-collapsed .input-body,
     .input-collapsed .secondary-card {
       display: none;
@@ -152,6 +157,16 @@
     }
 
     .input-selection-mode .army-selection-body {
+      display: grid;
+    }
+
+    .input-compare-mode .input-body,
+    .input-compare-mode .army-selection-body,
+    .input-compare-mode .secondary-card {
+      display: none;
+    }
+
+    .input-compare-mode .army-compare-body {
       display: grid;
     }
 
@@ -169,6 +184,22 @@
 
     .input-collapsed.input-selection-mode .army-selection-body {
       display: none;
+    }
+
+    .input-collapsed.input-compare-mode .army-compare-body {
+      display: none;
+    }
+
+    .army-compare-results-shell {
+      display: none;
+    }
+
+    .compare-results-mode .normal-results-shell {
+      display: none;
+    }
+
+    .compare-results-mode .army-compare-results-shell {
+      display: grid;
     }
 
     .input-collapsed > .card-title {
@@ -1193,6 +1224,33 @@
               </div>
             </div>
           </div>
+
+          <div id="armyCompareBody" class="army-compare-body">
+            <div class="grid two">
+              <div class="field">
+                <label for="armyCompareOwnRoster">Eigene Armee</label>
+                <select id="armyCompareOwnRoster"></select>
+              </div>
+              <div class="field">
+                <label for="armyCompareEnemyRoster">Gegnerische Armee</label>
+                <select id="armyCompareEnemyRoster"></select>
+              </div>
+            </div>
+            <details class="mini-details" open>
+              <summary>
+                <div class="meta-row">
+                  <span class="pill"><span class="summary-arrow">▶</span>Gegnerische Einheiten berücksichtigen</span>
+                </div>
+              </summary>
+              <div class="mini-details-body">
+                <div id="armyCompareEnemyFilters" class="list-stack"></div>
+              </div>
+            </details>
+            <div class="button-row core-actions">
+              <button type="button" id="armyCompareRunBtn" class="primary">Armeen vergleichen</button>
+            </div>
+            <div id="armyCompareStatus" class="note-box">Wähle zwei Armeen und starte den Vergleich.</div>
+          </div>
         </section>
 
         <section class="card secondary-card panel flat-section">
@@ -1351,13 +1409,20 @@
 
       </form>
 
-      <section class="results-shell">
+      <section class="results-shell normal-results-shell">
         <div id="errorContainer" class="hidden"></div>
         <div class="field search-field">
           <label for="historySearch">Ergebnisse durchsuchen</label>
           <input id="historySearch" type="search" autocomplete="off" placeholder="z. B. FNP, 3+, W6, Kills" />
         </div>
         <div id="historyContainer" class="history-list"></div>
+      </section>
+      <section class="results-shell army-compare-results-shell">
+        <div class="field search-field">
+          <label for="armyCompareHistorySearch">Armeevergleiche durchsuchen</label>
+          <input id="armyCompareHistorySearch" type="search" autocomplete="off" placeholder="z. B. Fernkampf, Wraith, 65%" />
+        </div>
+        <div id="armyCompareHistoryContainer" class="history-list"></div>
       </section>
     </div>
   </div>
@@ -1648,6 +1713,7 @@
 
       const EPSILON = 1e-12;
       const HISTORY_KEY = "wh40k-prob-history-v1";
+      const ARMY_COMPARE_HISTORY_KEY = "wh40k-army-compare-history-v1";
       const UI_STATE_KEY = "wh40k-prob-ui-state-v1";
       const CLOUD_PROFILE_KEY = "wh40k-prob-cloud-profile-v1";
       const SYNC_STATUS_KEY = "wh40k-prob-sync-status-v1";
@@ -1711,6 +1777,8 @@
         armyCompareRunBtn: document.getElementById("armyCompareRunBtn"),
         armyCompareStatus: document.getElementById("armyCompareStatus"),
         armyCompareResults: document.getElementById("armyCompareResults"),
+        armyCompareHistorySearch: document.getElementById("armyCompareHistorySearch"),
+        armyCompareHistoryContainer: document.getElementById("armyCompareHistoryContainer"),
         armyImportBtn: document.getElementById("armyImportBtn"),
         armyImportFile: document.getElementById("armyImportFile"),
         armyEditorOpenBtn: document.getElementById("armyEditorOpenBtn"),
@@ -1804,7 +1872,9 @@
       };
 
       let historyEntries = loadHistory();
+      let armyCompareEntries = loadArmyCompareHistory();
       let uiState = loadUiState();
+      let inputMode = "manual";
       let openHistoryId = null;
       let editingHistoryId = null;
       let compareSelection = [];
@@ -1826,6 +1896,7 @@
       restoreAccordionState();
       updateSectionSummaries();
       renderHistory();
+      renderArmyCompareHistory();
       updateSyncStatus();
       updateStickyJumpButton();
       initCloud();
@@ -1871,10 +1942,10 @@
           await refreshArmyData();
         });
 
-        ids.inputModeCompareBtn.addEventListener("click", () => {
+        ids.inputModeCompareBtn.addEventListener("click", async () => {
           setInputMode("compare");
-          setInputCollapsed(true);
-          openArmyCompare();
+          setInputCollapsed(false);
+          await prepareArmyCompareInput();
         });
 
         document.addEventListener("click", event => {
@@ -1969,6 +2040,20 @@
 
         ids.historySearch.addEventListener("input", () => {
           renderHistory();
+        });
+
+        ids.armyCompareHistorySearch.addEventListener("input", () => {
+          renderArmyCompareHistory();
+        });
+
+        ids.armyCompareHistoryContainer.addEventListener("click", event => {
+          const button = event.target.closest("button[data-delete-army-compare]");
+          if (!button) return;
+          const id = button.getAttribute("data-delete-army-compare");
+          armyCompareEntries = armyCompareEntries.filter(entry => entry.id !== id);
+          saveArmyCompareHistory();
+          renderArmyCompareHistory();
+          showToast("Armeevergleich gelöscht.");
         });
 
         ids.compareSearch.addEventListener("input", () => {
@@ -2245,12 +2330,16 @@
       }
 
       function setInputMode(mode) {
+        inputMode = mode;
         const armyMode = mode === "army";
         const compareMode = mode === "compare";
         ids.form.classList.toggle("input-selection-mode", armyMode);
+        ids.form.classList.toggle("input-compare-mode", compareMode);
+        document.body.classList.toggle("compare-results-mode", compareMode);
         ids.inputModeManualBtn.classList.toggle("active", mode === "manual");
         ids.inputModeArmyBtn.classList.toggle("active", armyMode);
         ids.inputModeCompareBtn.classList.toggle("active", compareMode);
+        updateStickyJumpButton();
       }
 
       function jumpBetweenInputAndResult() {
@@ -2267,6 +2356,10 @@
       }
 
       function scrollToCurrentResult() {
+        if (inputMode === "compare") {
+          scrollToElement(ids.armyCompareHistoryContainer);
+          return;
+        }
         const currentResult = openHistoryId
           ? ids.historyContainer.querySelector(`.history-details[data-history-id="${cssEscape(openHistoryId)}"]`)
           : null;
@@ -3779,6 +3872,50 @@
         });
       }
 
+      function renderArmyCompareHistory() {
+        if (!armyCompareEntries.length) {
+          ids.armyCompareHistoryContainer.innerHTML = `
+            <section class="card panel">
+              <div class="note-box">Noch kein Armeevergleich gespeichert.</div>
+            </section>
+          `;
+          return;
+        }
+
+        const searchTerm = normalizeSearch(ids.armyCompareHistorySearch.value);
+        const visibleEntries = armyCompareEntries.filter(entry =>
+          !searchTerm || normalizeSearch(`${entry.title} ${entry.summary} ${entry.searchText}`).includes(searchTerm)
+        );
+        ids.armyCompareHistoryContainer.innerHTML = visibleEntries.length
+          ? visibleEntries.map((entry, index) => renderArmyCompareHistoryCard(entry, armyCompareEntries.findIndex(item => item.id === entry.id), index === 0)).join("")
+          : `<section class="card panel"><div class="note-box">Keine Armeevergleiche für diese Suche.</div></section>`;
+      }
+
+      function renderArmyCompareHistoryCard(entry, index, open) {
+        return `
+          <article class="card history-card">
+            <details class="history-details" ${open ? "open" : ""}>
+              <summary>
+                <div class="history-head">
+                  <div>
+                    <h3>${escapeHtml(entry.title)} #${armyCompareEntries.length - index}</h3>
+                    <div class="muted">${formatDate(entry.createdAt)}</div>
+                  </div>
+                  <span class="pill"><span class="summary-arrow">▶</span>Öffnen</span>
+                </div>
+              </summary>
+              <div class="history-body">
+                <div class="history-actions">
+                  <button type="button" class="warn" data-delete-army-compare="${entry.id}">Löschen</button>
+                </div>
+                <div class="note-box">${escapeHtml(entry.summary)}</div>
+                <div class="list-stack">${entry.html}</div>
+              </div>
+            </details>
+          </article>
+        `;
+      }
+
       function renderOutputSections(outputs) {
         return `
           <section class="mini-card">
@@ -4086,6 +4223,22 @@
         } catch {}
       }
 
+      function loadArmyCompareHistory() {
+        try {
+          const raw = localStorage.getItem(ARMY_COMPARE_HISTORY_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          return Array.isArray(parsed) ? parsed.filter(entry => entry?.id && entry?.html) : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveArmyCompareHistory() {
+        try {
+          localStorage.setItem(ARMY_COMPARE_HISTORY_KEY, JSON.stringify(armyCompareEntries));
+        } catch {}
+      }
+
       async function initCloud() {
         renderCloudProfiles();
         if (typeof fetch !== "function") {
@@ -4128,13 +4281,17 @@
           openHistoryId = null;
           editingHistoryId = null;
           await refreshArmyData();
+          if (inputMode === "compare") await prepareArmyCompareInput();
           renderHistory();
+          renderArmyCompareHistory();
           updateSyncStatus();
           showToast("Lokale Historie aktiv.");
           return;
         }
         await loadCloudHistory();
         await refreshArmyData();
+        if (inputMode === "compare") await prepareArmyCompareInput();
+        renderArmyCompareHistory();
       }
 
       async function loadCloudProfiles() {
@@ -4428,8 +4585,11 @@
         closeFloatingMenu();
         ids.armyCompareModal.classList.add("show");
         ids.armyCompareModal.setAttribute("aria-hidden", "false");
+        await prepareArmyCompareInput();
+      }
+
+      async function prepareArmyCompareInput() {
         ids.armyCompareStatus.textContent = "Armeen werden geladen...";
-        ids.armyCompareResults.innerHTML = "";
         try {
           await refreshArmyData();
           renderArmyRosterSelect(ids.armyCompareOwnRoster);
@@ -4719,10 +4879,11 @@
         }
 
         ids.armyCompareStatus.textContent = "Berechne alle Paarungen...";
-        ids.armyCompareResults.innerHTML = "";
         await waitForPaint();
 
         try {
+          const ownRoster = armyRosters.find(roster => roster.id === ownRosterId);
+          const enemyRoster = armyRosters.find(roster => roster.id === enemyRosterId);
           const [ownUnits, enemyUnits] = await Promise.all([
             loadArmyUnits(ownRosterId),
             loadArmyUnits(enemyRosterId)
@@ -4739,8 +4900,27 @@
             }
           });
           const enemyAttacks = analyzeArmyMatchups(enemyThreatUnits, ownUnits);
-          ids.armyCompareResults.innerHTML = renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks);
-          ids.armyCompareStatus.textContent = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
+          const summary = `${ownUnits.length} eigene Einheiten gegen ${enemyUnits.length} gegnerische Einheiten berechnet. Angezeigt werden alle ausgewählten Einheiten, sortiert nach 65%-Schaden im Verhältnis zum Gesamt-LP-Wert.`;
+          const entry = {
+            id: createId(),
+            createdAt: new Date().toISOString(),
+            title: `${ownRoster?.name || "Eigene Armee"} → ${enemyRoster?.name || "Gegnerische Armee"}`,
+            summary,
+            html: renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks),
+            searchText: [
+              ownRoster?.name || "",
+              enemyRoster?.name || "",
+              ownUnits.map(unit => unit.name).join(" "),
+              enemyUnits.map(unit => unit.name).join(" "),
+              summary
+            ].join(" ")
+          };
+          armyCompareEntries.unshift(entry);
+          armyCompareEntries = armyCompareEntries.slice(0, HISTORY_LIMIT);
+          saveArmyCompareHistory();
+          renderArmyCompareHistory();
+          ids.armyCompareStatus.textContent = summary;
+          scrollToElement(ids.armyCompareHistoryContainer);
         } catch {
           ids.armyCompareStatus.textContent = "Armee-Vergleich konnte nicht berechnet werden.";
         }
