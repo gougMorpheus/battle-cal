@@ -2932,25 +2932,26 @@
       }
 
       function buildSequentialKillResults(weaponDataList, targetProfile, preDamage) {
-        const { modelCount, woundsPerModel } = targetProfile;
-        const stateSize = (modelCount + 1) * woundsPerModel;
+        targetProfile = normalizeTargetProfile(targetProfile);
+        const { modelCount } = targetProfile;
+        const stateSize = (modelCount + 1) * targetProfile.stateStride;
         let stateDist = Array(stateSize).fill(0);
         const initialState = computePreDamageState(targetProfile, preDamage);
-        stateDist[stateIndex(initialState.kills, initialState.remainder, woundsPerModel)] = 1;
+        stateDist[stateIndex(initialState.kills, initialState.remainder, targetProfile.stateStride)] = 1;
 
         weaponDataList.forEach(data => {
           stateDist = buildKillStateDistForWeapon({ ...data, targetProfile, preDamage: { enabled: false, value: 0 } }, stateDist);
         });
 
         const killDistribution = Array(modelCount + 1).fill(0);
-        const effectiveDamageDistribution = Array(modelCount * woundsPerModel + 1).fill(0);
+        const effectiveDamageDistribution = Array(targetProfile.totalWounds + 1).fill(0);
         let expectedEffectiveDamage = 0;
         for (let kills = 0; kills <= modelCount; kills += 1) {
-          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
-            const probability = stateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+          for (let remainder = 0; remainder < targetProfile.stateStride; remainder += 1) {
+            const probability = stateDist[stateIndex(kills, remainder, targetProfile.stateStride)] || 0;
             if (probability < EPSILON) continue;
             killDistribution[kills] += probability;
-            const effectiveDamage = Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+            const effectiveDamage = effectiveDamageFromState(kills, remainder, targetProfile);
             effectiveDamageDistribution[effectiveDamage] += probability;
             expectedEffectiveDamage += probability * effectiveDamage;
           }
@@ -2960,7 +2961,7 @@
           killDistribution: trimDistribution(killDistribution),
           effectiveDamageDistribution: trimDistribution(effectiveDamageDistribution),
           expectedEffectiveDamage,
-          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
+          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, targetProfile)
         };
       }
 
@@ -2984,8 +2985,8 @@
           damagePerUnsaved.dev
         );
         const autoDamageDist = buildAutoWoundDamageDistribution(saveSuccessProbability, saveFailProbability, damagePerUnsaved.normal);
-        const { modelCount, woundsPerModel } = data.targetProfile;
-        const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
+        data = { ...data, targetProfile: normalizeTargetProfile(data.targetProfile) };
+        const { modelCount } = data.targetProfile;
         const branchSpecs = [
           { weight: hitBranches.miss, normalHits: 0, autoWounds: 0 },
           { weight: hitBranches.normal, normalHits: 1, autoWounds: 0 },
@@ -2993,11 +2994,6 @@
           { weight: hitBranches.lethalOnly, normalHits: 0, autoWounds: 1 },
           { weight: hitBranches.both, normalHits: data.sustained.value, autoWounds: 1 }
         ].filter(branch => branch.weight > EPSILON);
-        const branchTransitions = branchSpecs.map(branch => ({
-          weight: branch.weight,
-          byRemainder: buildBranchTransitionByRemainder(branch.normalHits, branch.autoWounds, normalDamageDist, autoDamageDist, woundsPerModel)
-        }));
-
         let totalStateDist = Array(initialStateDist.length).fill(0);
         let currentStateDist = initialStateDist.slice();
         for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
@@ -3006,7 +3002,7 @@
             for (let i = 0; i < totalStateDist.length; i += 1) totalStateDist[i] += currentStateDist[i] * probability;
           }
           if (attacks < attackCountDist.length - 1) {
-            currentStateDist = applySingleAttackToStateDist(currentStateDist, branchTransitions, modelCount, woundsPerModel, absorbIndex);
+            currentStateDist = applySingleAttackToStateDist(currentStateDist, branchSpecs, normalDamageDist, autoDamageDist, data.targetProfile);
           }
         }
         return totalStateDist;
@@ -3018,12 +3014,13 @@
         const damageDist = buildFnpDamageDistributions(rawDamageDist, data.fnp);
         const saveFailProbability = data.saveTarget === null ? 1 : (data.saveTarget - 1) / 6;
         const saveSuccessProbability = 1 - saveFailProbability;
-        const { modelCount, woundsPerModel } = data.targetProfile;
+        data = { ...data, targetProfile: normalizeTargetProfile(data.targetProfile) };
+        const { modelCount } = data.targetProfile;
         let current = new Map();
 
         for (let kills = 0; kills <= modelCount; kills += 1) {
-          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
-            const probability = initialStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+          for (let remainder = 0; remainder < data.targetProfile.stateStride; remainder += 1) {
+            const probability = initialStateDist[stateIndex(kills, remainder, data.targetProfile.stateStride)] || 0;
             if (probability > EPSILON) {
               addMapProbability(current, killStateKey(kills, remainder, initialHitRerollToken(data), initialWoundRerollToken(data)), probability);
             }
@@ -3044,7 +3041,7 @@
         const output = Array(initialStateDist.length).fill(0);
         total.forEach((probability, key) => {
           const state = parseKillStateKey(key);
-          output[stateIndex(state.kills, state.remainder, woundsPerModel)] += probability;
+          output[stateIndex(state.kills, state.remainder, data.targetProfile.stateStride)] += probability;
         });
         return output;
       }
@@ -3118,7 +3115,8 @@
       }
 
       function buildKillResultsWithSingleRerolls(attackCountDist, data, saveSuccessProbability, saveFailProbability, damageDist) {
-        const { modelCount, woundsPerModel } = data.targetProfile;
+        data = { ...data, targetProfile: normalizeTargetProfile(data.targetProfile) };
+        const { modelCount } = data.targetProfile;
         const initialState = computePreDamageState(data.targetProfile, data.preDamage);
         const maxAttacks = attackCountDist.length - 1;
         let current = new Map([[killStateKey(initialState.kills, initialState.remainder, initialHitRerollToken(data), initialWoundRerollToken(data)), 1]]);
@@ -3135,12 +3133,12 @@
         }
 
         const killDistribution = Array(modelCount + 1).fill(0);
-        const effectiveDamageDistribution = Array(modelCount * woundsPerModel + 1).fill(0);
+        const effectiveDamageDistribution = Array(data.targetProfile.totalWounds + 1).fill(0);
         let expectedEffectiveDamage = 0;
         total.forEach((probability, key) => {
           const state = parseKillStateKey(key);
           killDistribution[state.kills] += probability;
-          const effectiveDamage = Math.min(modelCount * woundsPerModel, state.kills * woundsPerModel + state.remainder);
+          const effectiveDamage = effectiveDamageFromState(state.kills, state.remainder, data.targetProfile);
           effectiveDamageDistribution[effectiveDamage] += probability;
           expectedEffectiveDamage += probability * effectiveDamage;
         });
@@ -3149,7 +3147,7 @@
           killDistribution: trimDistribution(killDistribution),
           effectiveDamageDistribution: trimDistribution(effectiveDamageDistribution),
           expectedEffectiveDamage,
-          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
+          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, data.targetProfile)
         };
       }
 
@@ -3299,6 +3297,7 @@
       }
 
       function applyWoundOutcomeToKill(state, probability, kind, targetProfile, saveSuccessProbability, saveFailProbability, damageDist, output) {
+        targetProfile = normalizeTargetProfile(targetProfile);
         if (kind === "fail" || state.kills >= targetProfile.modelCount) {
           output.push({ state, probability });
           return;
@@ -3359,11 +3358,13 @@
       }
 
       function applyDamageToKillState(state, damage, targetProfile) {
+        targetProfile = normalizeTargetProfile(targetProfile);
         if (damage <= 0 || state.kills >= targetProfile.modelCount) return state;
-        const remaining = targetProfile.woundsPerModel - state.remainder;
+        const currentWounds = currentModelWounds(targetProfile, state.kills);
+        const remaining = currentWounds - state.remainder;
         const applied = Math.min(damage, remaining);
         const filled = state.remainder + applied;
-        if (filled >= targetProfile.woundsPerModel) {
+        if (filled >= currentWounds) {
           return { ...state, kills: Math.min(targetProfile.modelCount, state.kills + 1), remainder: 0 };
         }
         return { ...state, remainder: filled };
@@ -3421,9 +3422,9 @@
       }
 
       function buildKillResults(attackCountDist, hitBranches, normalDamageDist, autoDamageDist, sustained, targetProfile, preDamage) {
-        const { modelCount, woundsPerModel } = targetProfile;
-        const stateSize = (modelCount + 1) * woundsPerModel;
-        const absorbIndex = stateIndex(modelCount, 0, woundsPerModel);
+        targetProfile = normalizeTargetProfile(targetProfile);
+        const { modelCount } = targetProfile;
+        const stateSize = (modelCount + 1) * targetProfile.stateStride;
         const initialState = computePreDamageState(targetProfile, preDamage);
 
         const branchSpecs = [
@@ -3434,14 +3435,9 @@
           { weight: hitBranches.both, normalHits: sustained.value, autoWounds: 1 }
         ].filter(branch => branch.weight > EPSILON);
 
-        const branchTransitions = branchSpecs.map(branch => ({
-          weight: branch.weight,
-          byRemainder: buildBranchTransitionByRemainder(branch.normalHits, branch.autoWounds, normalDamageDist, autoDamageDist, woundsPerModel)
-        }));
-
         let totalStateDist = Array(stateSize).fill(0);
         let currentStateDist = Array(stateSize).fill(0);
-        currentStateDist[stateIndex(initialState.kills, initialState.remainder, woundsPerModel)] = 1;
+        currentStateDist[stateIndex(initialState.kills, initialState.remainder, targetProfile.stateStride)] = 1;
 
         for (let attacks = 0; attacks < attackCountDist.length; attacks += 1) {
           const probability = attackCountDist[attacks] || 0;
@@ -3449,19 +3445,19 @@
             for (let i = 0; i < stateSize; i += 1) totalStateDist[i] += currentStateDist[i] * probability;
           }
           if (attacks < attackCountDist.length - 1) {
-            currentStateDist = applySingleAttackToStateDist(currentStateDist, branchTransitions, modelCount, woundsPerModel, absorbIndex);
+            currentStateDist = applySingleAttackToStateDist(currentStateDist, branchSpecs, normalDamageDist, autoDamageDist, targetProfile);
           }
         }
 
         const killDistribution = Array(modelCount + 1).fill(0);
-        const effectiveDamageDistribution = Array(modelCount * woundsPerModel + 1).fill(0);
+        const effectiveDamageDistribution = Array(targetProfile.totalWounds + 1).fill(0);
         let expectedEffectiveDamage = 0;
         for (let kills = 0; kills <= modelCount; kills += 1) {
-          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
-            const probability = totalStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+          for (let remainder = 0; remainder < targetProfile.stateStride; remainder += 1) {
+            const probability = totalStateDist[stateIndex(kills, remainder, targetProfile.stateStride)] || 0;
             if (probability < EPSILON) continue;
             killDistribution[kills] += probability;
-            const effectiveDamage = Math.min(modelCount * woundsPerModel, kills * woundsPerModel + remainder);
+            const effectiveDamage = effectiveDamageFromState(kills, remainder, targetProfile);
             effectiveDamageDistribution[effectiveDamage] += probability;
             expectedEffectiveDamage += probability * effectiveDamage;
           }
@@ -3471,18 +3467,25 @@
           killDistribution: trimDistribution(killDistribution),
           effectiveDamageDistribution: trimDistribution(effectiveDamageDistribution),
           expectedEffectiveDamage,
-          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount)
+          expectedKillOutput: formatExpectedKillOutput(expectedEffectiveDamage, targetProfile)
         };
       }
 
       function computePreDamageState(targetProfile, preDamage) {
+        targetProfile = normalizeTargetProfile(targetProfile);
         if (!preDamage?.enabled || !preDamage.value) return { kills: 0, remainder: 0 };
 
-        const maxDamage = targetProfile.modelCount * targetProfile.woundsPerModel;
-        const cappedDamage = Math.min(preDamage.value, maxDamage);
-        const kills = Math.min(targetProfile.modelCount, Math.floor(cappedDamage / targetProfile.woundsPerModel));
-        const remainder = kills >= targetProfile.modelCount ? 0 : cappedDamage - kills * targetProfile.woundsPerModel;
-        return { kills, remainder };
+        let state = { kills: 0, remainder: 0 };
+        let remaining = Math.min(preDamage.value, targetProfile.totalWounds);
+        while (remaining > 0 && state.kills < targetProfile.modelCount) {
+          const currentWounds = currentModelWounds(targetProfile, state.kills);
+          const gap = currentWounds - state.remainder;
+          const applied = Math.min(remaining, gap);
+          state = { kills: state.kills, remainder: state.remainder + applied };
+          if (state.remainder >= currentWounds) state = { kills: state.kills + 1, remainder: 0 };
+          remaining -= applied;
+        }
+        return state;
       }
 
       function buildBranchTransitionByRemainder(normalHits, autoWounds, normalDamageDist, autoDamageDist, woundsPerModel) {
@@ -3502,30 +3505,58 @@
         return output;
       }
 
-      function applySingleAttackToStateDist(currentStateDist, branchTransitions, modelCount, woundsPerModel, absorbIndex) {
+      function applySingleAttackToStateDist(currentStateDist, branchSpecs, normalDamageDist, autoDamageDist, targetProfile) {
+        targetProfile = normalizeTargetProfile(targetProfile);
+        const { modelCount } = targetProfile;
         const nextStateDist = Array(currentStateDist.length).fill(0);
         for (let kills = 0; kills <= modelCount; kills += 1) {
-          for (let remainder = 0; remainder < woundsPerModel; remainder += 1) {
-            const probability = currentStateDist[stateIndex(kills, remainder, woundsPerModel)] || 0;
+          for (let remainder = 0; remainder < targetProfile.stateStride; remainder += 1) {
+            const probability = currentStateDist[stateIndex(kills, remainder, targetProfile.stateStride)] || 0;
             if (probability < EPSILON) continue;
 
             if (kills >= modelCount) {
-              nextStateDist[absorbIndex] += probability;
+              nextStateDist[stateIndex(modelCount, 0, targetProfile.stateStride)] += probability;
               continue;
             }
 
-            for (const branch of branchTransitions) {
-              for (const outcome of branch.byRemainder[remainder]) {
+            for (const branch of branchSpecs) {
+              for (const outcome of buildBranchStateOutcomes({ kills, remainder }, branch.normalHits, branch.autoWounds, normalDamageDist, autoDamageDist, targetProfile)) {
                 const weighted = probability * branch.weight * outcome.probability;
                 if (weighted < EPSILON) continue;
-                const newKills = Math.min(modelCount, kills + outcome.deltaKills);
-                const newRemainder = newKills >= modelCount ? 0 : outcome.remainder;
-                nextStateDist[stateIndex(newKills, newRemainder, woundsPerModel)] += weighted;
+                nextStateDist[stateIndex(outcome.kills, outcome.remainder, targetProfile.stateStride)] += weighted;
               }
             }
           }
         }
         return nextStateDist;
+      }
+
+      function buildBranchStateOutcomes(initialState, normalHits, autoWounds, normalDamageDist, autoDamageDist, targetProfile) {
+        let states = new Map([[killProgressKey(initialState.kills, initialState.remainder), 1]]);
+        for (let i = 0; i < normalHits; i += 1) states = applyDamageAttemptAbsolute(states, normalDamageDist, targetProfile);
+        for (let i = 0; i < autoWounds; i += 1) states = applyDamageAttemptAbsolute(states, autoDamageDist, targetProfile);
+        return Array.from(states.entries()).map(([key, probability]) => {
+          const [kills, remainder] = key.split("|").map(Number);
+          return { kills, remainder, probability };
+        });
+      }
+
+      function applyDamageAttemptAbsolute(states, damageDist, targetProfile) {
+        const next = new Map();
+        states.forEach((stateProbability, key) => {
+          const [kills, remainder] = key.split("|").map(Number);
+          damageDist.forEach((damageProbability, damage) => {
+            if (damageProbability < EPSILON) return;
+            const state = applyDamageToKillState({ kills, remainder }, damage, targetProfile);
+            const nextKey = killProgressKey(state.kills, state.remainder);
+            next.set(nextKey, (next.get(nextKey) || 0) + stateProbability * damageProbability);
+          });
+        });
+        return next;
+      }
+
+      function killProgressKey(kills, remainder) {
+        return `${kills}|${remainder}`;
       }
 
       function applyDamageAttemptRelative(states, damageDist, woundsPerModel) {
@@ -3822,18 +3853,58 @@
         return distribution[value] || 0;
       }
 
-      function stateIndex(kills, remainder, woundsPerModel) {
-        return kills * woundsPerModel + remainder;
+      function normalizeTargetProfile(targetProfile) {
+        if (targetProfile?.modelWounds?.length && targetProfile.stateStride) return targetProfile;
+        const modelCount = Number(targetProfile?.modelCount || 1);
+        const fallbackWounds = Number(targetProfile?.woundsPerModel || 1);
+        const modelWounds = Array.isArray(targetProfile?.modelWounds) && targetProfile.modelWounds.length
+          ? targetProfile.modelWounds.map(value => Math.max(1, Number(value || fallbackWounds))).slice(0, modelCount)
+          : Array(modelCount).fill(fallbackWounds);
+        while (modelWounds.length < modelCount) modelWounds.push(fallbackWounds);
+        const stateStride = Math.max(...modelWounds, 1) + 1;
+        return {
+          ...targetProfile,
+          modelCount,
+          woundsPerModel: fallbackWounds,
+          modelWounds,
+          stateStride,
+          totalWounds: modelWounds.reduce((sum, value) => sum + value, 0),
+          killedWoundPrefix: modelWounds.reduce((prefix, value) => {
+            prefix.push(prefix[prefix.length - 1] + value);
+            return prefix;
+          }, [0])
+        };
+      }
+
+      function currentModelWounds(targetProfile, kills) {
+        targetProfile = normalizeTargetProfile(targetProfile);
+        return targetProfile.modelWounds[kills] || targetProfile.woundsPerModel || 1;
+      }
+
+      function effectiveDamageFromState(kills, remainder, targetProfile) {
+        targetProfile = normalizeTargetProfile(targetProfile);
+        const cappedKills = Math.min(kills, targetProfile.modelCount);
+        return Math.min(targetProfile.totalWounds, (targetProfile.killedWoundPrefix[cappedKills] || 0) + (cappedKills >= targetProfile.modelCount ? 0 : remainder));
+      }
+
+      function stateIndex(kills, remainder, stride) {
+        return kills * stride + remainder;
       }
 
       function relativeStateKey(deltaKills, remainder) {
         return `${deltaKills}|${remainder}`;
       }
 
-      function formatExpectedKillOutput(expectedEffectiveDamage, woundsPerModel, modelCount) {
-        const cappedDamage = Math.min(expectedEffectiveDamage, modelCount * woundsPerModel);
-        const kills = Math.min(modelCount, Math.floor(cappedDamage / woundsPerModel));
-        const remaining = kills >= modelCount ? 0 : cappedDamage - kills * woundsPerModel;
+      function formatExpectedKillOutput(expectedEffectiveDamage, targetProfile, modelCount = null) {
+        if (typeof targetProfile === "number") {
+          targetProfile = normalizeTargetProfile({ woundsPerModel: targetProfile, modelCount: modelCount || 1 });
+        } else {
+          targetProfile = normalizeTargetProfile(targetProfile);
+        }
+        const cappedDamage = Math.min(expectedEffectiveDamage, targetProfile.totalWounds);
+        let kills = 0;
+        while (kills < targetProfile.modelCount && (targetProfile.killedWoundPrefix[kills + 1] || 0) <= cappedDamage + EPSILON) kills += 1;
+        const remaining = kills >= targetProfile.modelCount ? 0 : cappedDamage - (targetProfile.killedWoundPrefix[kills] || 0);
         return `${kills} Kills + ${formatNumber(remaining)} LP`;
       }
 
@@ -5002,8 +5073,22 @@
           });
         });
 
-        const primary = unitProfiles[0]?.profile;
-        const primaryChars = primary ? rosterCharMap(primary) : {};
+        const modelProfiles = buildRosterModelProfiles(unitProfiles, selection);
+        const allocationProfiles = sortModelProfilesForDamageAllocation(modelProfiles);
+        const primaryProfile = allocationProfiles[0] || modelProfiles[0];
+        const primary = primaryProfile?.profile || unitProfiles[0]?.profile;
+        const primaryChars = primaryProfile?.chars || (primary ? rosterCharMap(primary) : {});
+        const rawSelection = {
+          ...selection,
+          __battle_cal_model_profiles: modelProfiles.map(item => ({
+            name: item.name,
+            count: item.count,
+            toughness: item.toughness,
+            save: item.save,
+            invulnerable_save: item.invulnerable_save,
+            wounds_per_model: item.wounds_per_model
+          }))
+        };
         return {
           unit: {
             id: unitId,
@@ -5019,10 +5104,53 @@
             wounds_per_model: parseIntegerText(primaryChars.LP || primaryChars.W),
             leadership_text: primaryChars.MW || primaryChars.LD || "",
             objective_control: parseIntegerText(primaryChars.MK || primaryChars.OC),
-            raw_selection: selection
+            raw_selection: rawSelection
           },
           weapons
         };
+      }
+
+      function buildRosterModelProfiles(unitProfiles, selection) {
+        const profiles = unitProfiles
+          .map(({ node, profile }) => {
+            const chars = rosterCharMap(profile);
+            return {
+              node,
+              profile,
+              chars,
+              name: profile.name || selection.name,
+              count: Number(node.number || 1),
+              toughness: parseIntegerText(chars.W || chars.T),
+              save: parseIntegerText(chars.RW || chars.SV),
+              invulnerable_save: parseInvulnerableSave(node, chars) || parseInvulnerableSave(selection, chars),
+              wounds_per_model: parseIntegerText(chars.LP || chars.W)
+            };
+          })
+          .filter(item => item.wounds_per_model);
+        return profiles.length ? profiles : [{
+          name: selection.name,
+          count: Number(selection.number || 1),
+          toughness: null,
+          save: null,
+          invulnerable_save: null,
+          wounds_per_model: 1,
+          chars: {},
+          profile: null
+        }];
+      }
+
+      function sortModelProfilesForDamageAllocation(modelProfiles) {
+        return modelProfiles.slice().sort((a, b) =>
+          modelProfileDefenseRank(b) - modelProfileDefenseRank(a) ||
+          Number(b.wounds_per_model || 1) - Number(a.wounds_per_model || 1) ||
+          String(a.name || "").localeCompare(String(b.name || ""))
+        );
+      }
+
+      function modelProfileDefenseRank(profile) {
+        const toughness = Number(profile.toughness || 0);
+        const bestSave = [profile.save, profile.invulnerable_save].filter(Boolean).map(Number).sort((a, b) => a - b)[0] || 7;
+        return toughness * 100 + (7 - bestSave) * 10;
       }
 
       function walkRosterSelection(selection, fn) {
@@ -5270,15 +5398,20 @@
       }
 
       function unitTotalWounds(unit) {
-        return Number(unit.model_count || 1) * Number(unit.wounds_per_model || 1);
+        return buildDamageAllocationWounds(unit).reduce((sum, value) => sum + value, 0);
       }
 
       function formatEffectiveDamageOutput(value, unit) {
-        const woundsPerModel = Number(unit.wounds_per_model || 1);
-        const modelCount = Number(unit.model_count || 1);
-        const capped = Math.min(Number(value || 0), woundsPerModel * modelCount);
-        const destroyedModels = Math.min(modelCount, Math.floor(capped / woundsPerModel));
-        const spill = destroyedModels >= modelCount ? 0 : capped - destroyedModels * woundsPerModel;
+        const modelWounds = buildDamageAllocationWounds(unit);
+        const totalWounds = modelWounds.reduce((sum, wounds) => sum + wounds, 0);
+        const capped = Math.min(Number(value || 0), totalWounds);
+        let destroyedModels = 0;
+        let consumed = 0;
+        while (destroyedModels < modelWounds.length && consumed + modelWounds[destroyedModels] <= capped + EPSILON) {
+          consumed += modelWounds[destroyedModels];
+          destroyedModels += 1;
+        }
+        const spill = destroyedModels >= modelWounds.length ? 0 : capped - consumed;
         return `${formatNumber(capped)} LP (${destroyedModels}M + ${formatNumber(spill)})`;
       }
 
@@ -6000,7 +6133,8 @@
           },
           targetProfile: {
             modelCount: Number(target.model_count || 1),
-            woundsPerModel: Number(target.wounds_per_model || 1)
+            woundsPerModel: Number(target.wounds_per_model || 1),
+            modelWounds: buildDamageAllocationWounds(target)
           },
           armyWeaponName: cleanWeaponName(weapon.name),
           attackPhase: weaponMatchesAttackMode(weapon, "melee") ? "melee" : "ranged"
@@ -6156,6 +6290,39 @@
         const normal = unit.save ? `${unit.save}+` : "-";
         const invul = unit.invulnerable_save ? ` / ${unit.invulnerable_save}++` : "";
         return `Save ${normal}${invul}`;
+      }
+
+      function buildDamageAllocationWounds(unit) {
+        const rawProfiles = unit.raw_selection?.__battle_cal_model_profiles || extractModelProfilesFromRawSelection(unit.raw_selection);
+        if (!Array.isArray(rawProfiles) || !rawProfiles.length) {
+          return Array(Number(unit.model_count || 1)).fill(Number(unit.wounds_per_model || 1));
+        }
+        const orderedProfiles = sortModelProfilesForDamageAllocation(rawProfiles);
+        const wounds = [];
+        orderedProfiles.forEach(profile => {
+          const count = Math.max(1, Number(profile.count || 1));
+          const woundsPerModel = Math.max(1, Number(profile.wounds_per_model || unit.wounds_per_model || 1));
+          for (let i = 0; i < count; i += 1) wounds.push(woundsPerModel);
+        });
+        const fallback = Number(unit.wounds_per_model || 1);
+        while (wounds.length < Number(unit.model_count || 1)) wounds.push(fallback);
+        return wounds.slice(0, Number(unit.model_count || wounds.length || 1));
+      }
+
+      function extractModelProfilesFromRawSelection(selection) {
+        if (!selection || typeof selection !== "object") return [];
+        const unitProfiles = [];
+        walkRosterSelection(selection, node => {
+          (node.profiles || []).filter(isUnitProfile).forEach(profile => unitProfiles.push({ node, profile }));
+        });
+        return buildRosterModelProfiles(unitProfiles, selection).map(item => ({
+          name: item.name,
+          count: item.count,
+          toughness: item.toughness,
+          save: item.save,
+          invulnerable_save: item.invulnerable_save,
+          wounds_per_model: item.wounds_per_model
+        }));
       }
 
       function sumValues(items, fn) {
