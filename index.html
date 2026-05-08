@@ -5471,15 +5471,16 @@
 
       function renderArmyCompareResults(ownUnits, ownAttacks, enemyAttacks) {
         if (!ownUnits.length) return `<div class="note-box">Keine eigenen Einheiten gefunden.</div>`;
-        return ownUnits.map((unit, index) => {
+        const summary = renderArmyCompareSummary(ownUnits, ownAttacks, enemyAttacks);
+        const details = ownUnits.map(unit => {
           const outgoing = ownAttacks.get(unit.id) || { ranged: [], melee: [] };
           const incomingAll = collectIncomingThreats(unit, enemyAttacks);
           return `
             <section class="mini-card">
-              <details class="section-details" ${index === 0 ? "open" : ""}>
+              <details class="section-details">
                 <summary>
                   <div class="summary-head">
-                    <span class="pill"><span class="summary-arrow">▶</span>${escapeHtml(unit.name)} <small>(${escapeHtml(unit.model_count)}M x ${escapeHtml(unit.wounds_per_model || "-")} LP)</small></span>
+                    <span class="pill"><span class="summary-arrow">▶</span>Details: ${escapeHtml(unit.name)} <small>(${escapeHtml(unit.model_count)}M x ${escapeHtml(unit.wounds_per_model || "-")} LP)</small></span>
                     <span class="section-summary-text">${escapeHtml(unit.model_count)} Modelle, W${escapeHtml(unit.toughness || "-")}, ${escapeHtml(formatUnitSaves(unit))}, ${escapeHtml(unit.wounds_per_model || "-")} LP</span>
                   </div>
                 </summary>
@@ -5497,6 +5498,7 @@
             </section>
           `;
         }).join("");
+        return `${summary}${details}`;
       }
 
       function collectIncomingThreats(unit, enemyAttacks) {
@@ -5511,13 +5513,90 @@
         return incoming;
       }
 
+      function renderArmyCompareSummary(ownUnits, ownAttacks, enemyAttacks) {
+        const bestTargets = [];
+        const worstThreats = [];
+        ownUnits.forEach(unit => {
+          const outgoing = ownAttacks.get(unit.id) || { ranged: [], melee: [] };
+          ["ranged", "melee"].forEach(mode => {
+            const best = sortArmyCompareResults(outgoing[mode] || [])[0];
+            if (best) bestTargets.push(best);
+          });
+
+          const incoming = collectIncomingThreats(unit, enemyAttacks);
+          ["ranged", "melee"].forEach(mode => {
+            const worst = sortArmyCompareResults(incoming[mode] || [])[0];
+            if (worst) worstThreats.push(worst);
+          });
+        });
+
+        const robustUnits = ownUnits
+          .map(unit => {
+            const incoming = collectIncomingThreats(unit, enemyAttacks);
+            const worst = sortArmyCompareResults([...(incoming.ranged || []), ...(incoming.melee || [])])[0];
+            return { unit, worst, score: worst?.reliableDamageRatio || 0 };
+          })
+          .sort((a, b) => a.score - b.score)
+          .slice(0, 3);
+
+        return `
+          <section class="mini-card">
+            <details class="section-details" open>
+              <summary>
+                <div class="summary-head">
+                  <span class="pill"><span class="summary-arrow">▶</span>Summary und Empfehlungen</span>
+                  <span class="section-summary-text">${ownUnits.length} eigene Einheiten ausgewertet</span>
+                </div>
+              </summary>
+              <div class="section-details-body stack">
+                ${renderArmyCompareSummaryBlock("Beste Angriffschancen", sortArmyCompareResults(bestTargets).slice(0, 5), "target")}
+                ${renderArmyCompareSummaryBlock("Größte Bedrohungen", sortArmyCompareResults(worstThreats).slice(0, 5), "threat")}
+                <div class="mini-card">
+                  <div class="card-title"><h3>Robuste eigene Einheiten</h3></div>
+                  <div class="list-stack">
+                    ${robustUnits.length ? robustUnits.map(item => `
+                      <div class="list-row">
+                        <span>
+                          <strong>${escapeHtml(item.unit.name)}</strong><br />
+                          <small>Schlimmster geprüfter Treffer: ${item.worst ? `${escapeHtml(item.worst.thresholdPercent)}%-Schaden ${escapeHtml(formatEffectiveDamageOutput(item.worst.reliableDamage, item.unit))}` : "keine berechenbare Bedrohung"}</small>
+                        </span>
+                      </div>
+                    `).join("") : `<div class="list-row"><span>Keine belastbaren Bedrohungsdaten.</span></div>`}
+                  </div>
+                </div>
+              </div>
+            </details>
+          </section>
+        `;
+      }
+
+      function renderArmyCompareSummaryBlock(title, results, perspective) {
+        return `
+          <div class="mini-card">
+            <div class="card-title"><h3>${escapeHtml(title)}</h3></div>
+            <div class="list-stack">
+              ${results.length ? results.map(result => {
+                const label = `${result.attacker.name} → ${result.defender.name}`;
+                const measuredUnit = perspective === "target" ? result.defender : result.defender;
+                return `
+                  <div class="list-row">
+                    <span>
+                      <strong>${escapeHtml(label)}</strong> <small>${escapeHtml(labelAttackPhase(result.mode))}</small><br />
+                      ${escapeHtml(result.thresholdPercent)}%-Schaden: <strong>${escapeHtml(formatEffectiveDamageOutput(result.reliableDamage, measuredUnit))}</strong>,
+                      LP-Anteil: <strong>${escapeHtml(formatPercent(result.reliableDamageRatio))}</strong>,
+                      Zerstörung: <strong>${escapeHtml(formatPercent(result.killProbability))}</strong><br />
+                      <small>${escapeHtml(result.weapons.map(weapon => `${weapon.count}x ${cleanWeaponName(weapon.name)}`).join(", "))}</small>
+                    </span>
+                  </div>
+                `;
+              }).join("") : `<div class="list-row"><span>Keine klare Empfehlung berechenbar.</span></div>`}
+            </div>
+          </div>
+        `;
+      }
+
       function renderArmyCompareMode(title, results, perspective) {
-        const sorted = results.slice().sort((a, b) =>
-          b.reliableDamageRatio - a.reliableDamageRatio ||
-          b.killProbability - a.killProbability ||
-          b.reliableDamage - a.reliableDamage ||
-          b.expectedEffectiveDamage - a.expectedEffectiveDamage
-        );
+        const sorted = sortArmyCompareResults(results);
         return `
           <div class="mini-card">
             <details class="mini-details">
@@ -5535,6 +5614,15 @@
             </details>
           </div>
         `;
+      }
+
+      function sortArmyCompareResults(results) {
+        return results.slice().sort((a, b) =>
+          b.reliableDamageRatio - a.reliableDamageRatio ||
+          b.killProbability - a.killProbability ||
+          b.reliableDamage - a.reliableDamage ||
+          b.expectedEffectiveDamage - a.expectedEffectiveDamage
+        );
       }
 
       function renderArmyCompareRow(result, perspective) {
