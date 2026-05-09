@@ -5558,14 +5558,12 @@
         ownUnits.forEach(unit => {
           const outgoing = ownAttacks.get(unit.id) || { ranged: [], melee: [] };
           ["ranged", "melee"].forEach(mode => {
-            const best = sortArmyCompareResults(outgoing[mode] || [])[0];
-            if (best) bestTargets.push(best);
+            bestTargets.push(...(outgoing[mode] || []));
           });
 
           const incoming = collectIncomingThreats(unit, enemyAttacks);
           ["ranged", "melee"].forEach(mode => {
-            const worst = sortArmyCompareResults(incoming[mode] || [])[0];
-            if (worst) worstThreats.push(worst);
+            worstThreats.push(...(incoming[mode] || []));
           });
         });
 
@@ -5588,8 +5586,8 @@
                 </div>
               </summary>
               <div class="section-details-body stack">
-                ${renderArmyCompareSummaryBlock("Beste Angriffschancen", sortArmyCompareResults(bestTargets).slice(0, 5), "target")}
-                ${renderArmyCompareSummaryBlock("Größte Bedrohungen", sortArmyCompareResults(worstThreats).slice(0, 5), "threat")}
+                ${renderArmyCompareSummaryBlock("Beste Angriffschancen", limitRepeatedSummaryUnits(sortArmyCompareResults(bestTargets), 5), "target")}
+                ${renderArmyCompareSummaryBlock("Größte Bedrohungen", limitRepeatedSummaryUnits(sortArmyCompareResults(worstThreats), 5), "threat")}
                 <div class="mini-card">
                   <div class="card-title"><h3>Robuste eigene Einheiten</h3></div>
                   <div class="list-stack">
@@ -5607,6 +5605,23 @@
             </details>
           </section>
         `;
+      }
+
+      function limitRepeatedSummaryUnits(results, limit) {
+        const attackerCounts = new Map();
+        const defenderCounts = new Map();
+        const selected = [];
+        for (const result of results) {
+          const attackerId = result.attacker.id;
+          const defenderId = result.defender.id;
+          if ((attackerCounts.get(attackerId) || 0) >= 2) continue;
+          if ((defenderCounts.get(defenderId) || 0) >= 2) continue;
+          selected.push(result);
+          attackerCounts.set(attackerId, (attackerCounts.get(attackerId) || 0) + 1);
+          defenderCounts.set(defenderId, (defenderCounts.get(defenderId) || 0) + 1);
+          if (selected.length >= limit) break;
+        }
+        return selected;
       }
 
       function renderArmyCompareSummaryBlock(title, results, perspective) {
